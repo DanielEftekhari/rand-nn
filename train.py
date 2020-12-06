@@ -50,12 +50,11 @@ class Trainer():
         # (if applicable) additional training set transforms defined here
         # train_transforms.extend([])
         
-        # in training, <drop_last> minibatch in an epoch set to <True> for simplicity in tracking training performance
         self.dataset_train = self.dataset(root=self.data_path, train=True, download=True,
                                 transform=transforms.Compose(self.train_transforms),
                                 target_transform=None)
         self.dataloader_train = DataLoader(dataset=self.dataset_train, batch_size=self.cfg.batch_size, shuffle=self.cfg.shuffle,
-                                    num_workers=self.cfg.num_workers, pin_memory=True, drop_last=True)
+                                    num_workers=self.cfg.num_workers, pin_memory=True, drop_last=False)
         
         self.dataset_val = self.dataset(root=self.data_path, train=False, download=True,
                             transform=transforms.Compose(self.val_transforms),
