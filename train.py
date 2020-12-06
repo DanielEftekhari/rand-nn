@@ -59,7 +59,7 @@ class Trainer():
         self.dataset_val = self.dataset(root=self.data_path, train=False, download=True,
                             transform=transforms.Compose(self.val_transforms),
                             target_transform=None)
-        self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=100, shuffle=False,
+        self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=self.cfg.batch_size, shuffle=False,
                                     num_workers=self.cfg.num_workers, pin_memory=True, drop_last=False)
         
         # number of output classes
