@@ -23,10 +23,206 @@ from plotting import plot_line, plot_hist
 import utils
 
 
+class Trainer():
+    def __init__(self, cfg):
+        self.cfg = cfg
+        
+        # set random seed
+        if self.cfg.random_seed != 0:
+            random_seed = self.cfg.random_seed
+        else:
+            random_seed = random.randint(1, 10000)
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+        
+        # set device as cuda or cpu
+        if self.cfg.use_gpu and torch.cuda.is_available():
+            # reproducibility using cuda
+            torch.cuda.manual_seed(random_seed)
+            cudnn.deterministic = True
+            cudnn.benchmark = False
+            self.device = torch.device('cuda')
+        else:
+            self.device = torch.device('cpu')
+            if self.cfg.use_gpu:
+                print('gpu option was set to <True>, but no cuda device was found')
+                utils.flush()
+        
+        # dataset parameters
+        if self.cfg.dataset.lower() == 'mnist':
+            self.dataset = MNIST
+            self.data_path = r'./data/mnist'
+            self.img_size = [1, 28, 28]
+            self.normalize = [(0.1307,), (0.3081,)]
+        else:
+            self.dataset = CIFAR10
+            self.data_path = r'./data/cifar10'
+            self.img_size = [3, 32, 32]
+            self.normalize = [(0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)]
+        
+        # datasets and dataloaders        
+        # base transforms
+        self.train_transforms = [transforms.ToTensor()]
+        if self.cfg.normalize_input:
+            self.train_transforms.append(transforms.Normalize(self.normalize[0], self.normalize[1]))
+        self.val_transforms = copy.deepcopy(self.train_transforms)
+        
+        # (if applicable) additional training set transforms defined here
+        # train_transforms.extend([])
+        
+        # in training, <drop_last> minibatch in an epoch set to <True> for simplicity in tracking training performance
+        self.dataset_train = self.dataset(root=self.data_path, train=True, download=True,
+                                transform=transforms.Compose(self.train_transforms),
+                                target_transform=None)
+        self.dataloader_train = DataLoader(dataset=self.dataset_train, batch_size=self.cfg.batch_size, shuffle=self.cfg.shuffle,
+                                    num_workers=self.cfg.num_workers, pin_memory=True, drop_last=True)
+        
+        self.dataset_val = self.dataset(root=self.data_path, train=False, download=True,
+                            transform=transforms.Compose(self.val_transforms),
+                            target_transform=None)
+        self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=100, shuffle=False,
+                                    num_workers=self.cfg.num_workers, pin_memory=True, drop_last=False)
+        
+        # number of output classes
+        targets = np.asarray(self.dataset_train.targets)
+        self.c_dim = np.unique(targets).shape[0]
+
+        # define model
+        # weights initialized using Kaiming uniform (He initialization)
+        # parameters for each hidden layer is passed in as an argument
+        self.activation = getattr(activations, self.cfg.activation.lower())
+        if 'fc' in self.cfg.nn_type.lower():
+            if self.cfg.norm.lower() == 'batch':
+                self.norm = nn.BatchNorm1d
+            elif self.cfg.norm.lower() == 'layer':
+                self.norm = layers.LayerNorm1d
+            else:
+                self.norm = None
+            self.net = FCNet(np.product(self.img_size), self.c_dim, self.cfg.fc_params, self.activation, self.norm, self.cfg).to(self.device)
+        else:
+            if self.cfg.norm.lower() == 'batch':
+               self.norm = nn.BatchNorm2d
+            elif self.cfg.norm.lower() == 'layer':
+                self.norm = layers.LayerNorm2d
+            else:
+                self.norm = None
+            self.net = ConvNet(self.img_size, self.c_dim, self.cfg.conv_params, self.activation, self.norm, self.cfg).to(self.device)
+        
+        self.criterion = nn.CrossEntropyLoss()
+        
+        if self.cfg.use_sgd:
+            self.optimizer = optim.SGD(params=self.net.parameters(), lr=self.cfg.lr, momentum=self.cfg.momentum, nesterov=self.cfg.use_nesterov)
+        else:
+            self.optimizer = optim.Adam(params=self.net.parameters(), lr=self.cfg.lr, betas=(self.cfg.beta1, self.cfg.beta2))
+    
+    def train(self):
+        # tracking training and validation stats over epochs
+        self.metrics = collections.defaultdict(list)
+        # best model is defined as model with best performing validation loss
+        self.best_loss = float('inf')
+        
+        # measure performance before any training is done
+        self.metrics['epochs'].append(0)
+        self.validate(self.dataloader_train, is_val_set=False, measure_entropy=False)
+        self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
+        
+        for epoch in range(1, self.cfg.epochs+1):
+            self.metrics['epochs'].append(epoch)
+            
+            self.train_one_epoch(self.dataloader_train)
+            self.validate(self.dataloader_val)
+            
+            if self.cfg.plot:
+                plot_line(self.metrics['epochs'], [self.metrics['train_loss'], self.metrics['val_loss']], ['Training', 'Validation'], 'Epoch Number', 'Loss', self.cfg)
+                plot_line(self.metrics['epochs'], [self.metrics['train_acc'], self.metrics['val_acc']], ['Training', 'Validation'], 'Epoch Number', 'Accuracy', self.cfg)
+                plot_line(self.metrics['epochs'], [self.metrics['val_entropy'], self.metrics['val_entropy_rand']], ['Inputs', 'Random Inputs'], 'Epoch Number', 'Entropy', self.cfg)
+            
+            if self.metrics['val_loss'][-1] < self.best_loss:
+                self.best_loss = self.metrics['val_loss'][-1]
+                print('New best model at epoch {:0=3d} with val_loss {:.4f}'.format(epoch, self.best_loss))
+                utils.flush()
+                
+                if self.cfg.save_model:
+                    # save model when validation loss improves
+                    save_name = '{}-net_{}_epoch{:0=3d}_val_loss{:.4f}'.format(self.cfg.nn_type, self.cfg.model_name, epoch, self.best_loss)
+                    torch.save(self.net.state_dict(), os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}.pth'.format(save_name)))
+                    with open(os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.nn_type, self.cfg.model_name)), 'w') as file:
+                        file.write('{}.pth'.format(save_name))
+    
+    def train_one_epoch(self, dataloader, is_val_set=False):
+        self.net.train()
+        
+        if is_val_set:
+            dataset = 'val'
+        else:
+            dataset = 'train'
+        
+        metrics_epoch = collections.defaultdict(list)
+        matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
+        for i, (x, y) in enumerate(dataloader):
+            x, y = x.to(self.device), y.to(self.device)
+            
+            self.optimizer.zero_grad()
+            logits = self.net(x)
+            loss = self.criterion(logits, y)
+            loss.backward()
+            self.optimizer.step()
+            
+            matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
+            utils.append((metrics_epoch['{}_loss'.format(dataset)], loss.item()),
+                        )
+        self.summarize_metrics(metrics_epoch, matrix, dataset)
+    
+    def validate(self, dataloader, is_val_set=True, measure_entropy=True):
+        self.net.eval()
+        
+        if is_val_set:
+            dataset = 'val'
+        else:
+            dataset = 'train'
+        
+        metrics_epoch = collections.defaultdict(list)
+        matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
+        with torch.no_grad():
+            for i, (x, y) in enumerate(dataloader):
+                x, y = x.to(self.device), y.to(self.device)
+                
+                logits = self.net(x)
+                loss = self.criterion(logits, y)
+                
+                matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
+                utils.append((metrics_epoch['{}_loss'.format(dataset)], loss.item()),
+                            )
+                
+                if measure_entropy:
+                    probs = utils.get_class_probs(logits)
+                    entropy = utils.entropy(probs)
+                    
+                    x_rand = (torch.rand_like(x) - 0.5) / 0.5
+                    logits_rand = self.net(x_rand)
+                    probs_rand = utils.get_class_probs(logits_rand)
+                    entropy_rand = utils.entropy(probs_rand)
+                    
+                    utils.append((metrics_epoch['{}_entropy'.format(dataset)], entropy.item()),
+                                 (metrics_epoch['{}_entropy_rand'.format(dataset)], entropy_rand.item()),
+                                )
+        self.summarize_metrics(metrics_epoch, matrix, dataset)
+    
+    def summarize_metrics(self, metrics_epoch, matrix, dataset):
+        for key in sorted(metrics_epoch.keys()):
+            self.metrics[key].append(utils.get_average(metrics_epoch[key]))
+            print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], key, self.metrics[key][-1]))
+        print(matrix)
+        self.metrics['{}_acc'.format(dataset)].append(utils.calculate_metrics(matrix))
+        print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_acc'.format(dataset), self.metrics['{}_acc'.format(dataset)][-1]))
+        utils.flush()
+
+
 def main(cfg):
     # setting up output directories, and writing to stdout
     utils.make_dirs(os.path.join(cfg.stdout_dir, cfg.nn_type), replace=False)
-    sys.stdout = open('{}/{}/stdout_{}_{}.txt'.format(cfg.stdout_dir, cfg.nn_type, cfg.nn_type, cfg.model_name), 'w')
+    sys.stdout = open(r'./{}/{}/stdout_{}_{}.txt'.format(cfg.stdout_dir, cfg.nn_type, cfg.nn_type, cfg.model_name), 'w')
     print(cfg)
     utils.flush()
     
@@ -35,170 +231,8 @@ def main(cfg):
     if cfg.save_model:
         utils.make_dirs(os.path.join(cfg.model_dir, cfg.nn_type, cfg.model_name), replace=True)
     
-    # set random seed
-    if cfg.random_seed != 0:
-        random_seed = cfg.random_seed
-    else:
-        random_seed = random.randint(1, 10000)
-    random.seed(random_seed)
-    np.random.seed(random_seed)
-    torch.manual_seed(random_seed)
-    
-    # set device as cuda or cpu
-    if cfg.use_gpu and torch.cuda.is_available():
-        # reproducibility using cuda
-        torch.cuda.manual_seed(random_seed)
-        cudnn.deterministic = True
-        cudnn.benchmark = False
-        device = torch.device('cuda')
-    else:
-        device = torch.device('cpu')
-        if cfg.use_gpu:
-            print('gpu option was set to <True>, but no cuda device was found')
-            utils.flush()
-    
-    if cfg.dataset.lower() == 'mnist':
-        dataset = MNIST
-        data_path = r'./data/mnist'
-        img_size = [1, 28, 28]
-        normalize = [(0.1307,), (0.3081,)]
-    else:
-        dataset = CIFAR10
-        data_path = r'./data/cifar10'
-        img_size = [3, 32, 32]
-        normalize = [(0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)]
-    
-    # datasets and dataloaders
-    # in training, <drop_last> minibatch in an epoch set to <True> for simplicity in tracking training performance
-    
-    # base transforms
-    train_transforms = [transforms.ToTensor()]
-    if cfg.normalize_input:
-        train_transforms.append(transforms.Normalize(normalize[0], normalize[1]))
-    val_transforms = copy.deepcopy(train_transforms)
-    
-    # (if applicable) additional training set transforms defined here
-    # train_transforms.extend([])
-    
-    dataset_train = dataset(root=data_path, train=True, download=True,
-                            transform=transforms.Compose(train_transforms),
-                            target_transform=None)
-    dataloader_train = DataLoader(dataset=dataset_train, batch_size=cfg.batch_size, shuffle=cfg.shuffle,
-                                  num_workers=cfg.num_workers, pin_memory=True, drop_last=True)
-    
-    dataset_val = dataset(root=data_path, train=False, download=True,
-                          transform=transforms.Compose(val_transforms),
-                          target_transform=None)
-    dataloader_val = DataLoader(dataset=dataset_val, batch_size=100, shuffle=False,
-                                num_workers=cfg.num_workers, pin_memory=True, drop_last=False)
-    
-    # number of output classes
-    targets = np.asarray(dataset_train.targets)
-    c = np.unique(targets).shape[0]
-
-    # define model
-    # weights initialized using Kaiming uniform (He initialization)
-    # parameters for each hidden layer is passed in as an argument
-    activation = getattr(activations, cfg.activation.lower())
-    if 'fc' in cfg.nn_type.lower():
-        if cfg.norm.lower() == 'batch':
-            norm = nn.BatchNorm1d
-        elif cfg.norm.lower() == 'layer':
-            norm = layers.LayerNorm1d
-        else:
-            norm = None
-        net = FCNet(np.product(img_size), c, cfg.fc_params, activation, norm, cfg).to(device)
-    else:
-        if cfg.norm.lower() == 'batch':
-            norm = nn.BatchNorm2d
-        elif cfg.norm.lower() == 'layer':
-            norm = layers.LayerNorm2d
-        else:
-            norm = None
-        net = ConvNet(img_size, c, cfg.conv_params, activation, norm, cfg).to(device)
-    
-    criterion = nn.CrossEntropyLoss()
-    
-    if cfg.use_sgd:
-        optimizer = optim.SGD(params=net.parameters(), lr=cfg.lr, momentum=cfg.momentum, nesterov=cfg.use_nesterov)
-    else:
-        optimizer = optim.Adam(params=net.parameters(), lr=cfg.lr, betas=(cfg.beta1, cfg.beta2))
-    
-    # tracking training and validation stats over epochs
-    metrics = collections.defaultdict(list)
-    
-    # best model is defined as model with best performing validation loss
-    best_loss = float('inf')
-    for epoch in range(cfg.epochs):
-        # tracking training and validation stats over a given epoch
-        metrics_epoch = collections.defaultdict(list)
-        matrix = np.zeros((c, c), dtype=np.uint32)
-        metrics['epochs'].append(epoch+1)
-        
-        # training set
-        net.train()
-        
-        for i, (x, y) in enumerate(dataloader_train):
-            x, y = x.to(device), y.to(device)
-            
-            optimizer.zero_grad()
-            logits = net(x)
-            loss = criterion(logits, y)
-            loss.backward()
-            optimizer.step()
-            
-            matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, c)
-            utils.append((metrics_epoch['train_loss'], loss.item()),
-                         )
-        
-        for key in sorted(metrics_epoch.keys()):
-            if 'train_loss' in key:
-                metrics[key].append(utils.get_average(metrics_epoch[key]))
-                print('train_epoch{:0=3d}_{}{:.4f}'.format(epoch+1, key, metrics[key][-1]))
-        print(matrix)
-        metrics['train_acc'].append(utils.calculate_metrics(matrix))
-        print('train_epoch{:0=3d}_{}{:.4f}'.format(epoch + 1, 'train_acc', metrics['train_acc'][-1]))
-        utils.flush()
-        
-        # validation set
-        net.eval()
-        
-        matrix = np.zeros((c, c), dtype=np.uint32)
-        with torch.no_grad():
-            for i, (x, y) in enumerate(dataloader_val):
-                x, y = x.to(device), y.to(device)
-                
-                logits = net(x)
-                loss = criterion(logits, y)
-                
-                matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, c)
-                utils.append((metrics_epoch['val_loss'], loss.item()),
-                             )
-        
-        for key in sorted(metrics_epoch.keys()):
-            if 'val_loss' in key:
-                metrics[key].append(utils.get_average(metrics_epoch[key]))
-                print('val_epoch{:0=3d}_{}{:.4f}'.format(epoch + 1, key, metrics[key][-1]))
-        print(matrix)
-        metrics['val_acc'].append(utils.calculate_metrics(matrix))
-        print('val_epoch{:0=3d}_{}{:.4f}'.format(epoch + 1, 'val_acc', metrics['val_acc'][-1]))
-        utils.flush()
-        
-        if cfg.plot:
-            plot_line(metrics['epochs'], metrics['train_loss'], metrics['val_loss'], 'Epoch Number', 'Loss', cfg)
-            plot_line(metrics['epochs'], metrics['train_acc'], metrics['val_acc'], 'Epoch Number', 'Accuracy', cfg)
-        
-        if metrics['val_loss'][-1] < best_loss:
-            best_loss = metrics['val_loss'][-1]
-            print('New best model at epoch {:0=3d} with val_loss {:.4f}'.format(epoch+1, best_loss))
-            utils.flush()
-            
-            if cfg.save_model:
-                # save model when validation loss improves
-                save_name = '{}-net_{}_epoch{:0=3d}_val_loss{:.4f}'.format(cfg.nn_type, cfg.model_name, epoch+1, best_loss)
-                torch.save(net.state_dict(), os.path.join(cfg.model_dir, cfg.nn_type, cfg.model_name, '{}.pth'.format(save_name)))
-                with open(os.path.join(cfg.model_dir, cfg.nn_type, cfg.model_name, '{}-net_{}.txt'.format(cfg.nn_type, cfg.model_name)), 'w') as file:
-                    file.write('{}.pth'.format(save_name))
+    trainer = Trainer(cfg)
+    trainer.train()
 
 
 if __name__ == '__main__':

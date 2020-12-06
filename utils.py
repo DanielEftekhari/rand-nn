@@ -24,6 +24,10 @@ def get_class_probs(logits):
     return torch.softmax(logits, dim=1)
 
 
+def entropy(probs):
+    return torch.mean(-torch.sum(probs * torch.log(probs), dim=-1))
+
+
 def calculate_metrics(matrix):
     acc = np.trace(matrix) / np.sum(matrix)
     return acc
@@ -49,6 +53,19 @@ def append(*args):
     for arg in args:
         if arg[1]:
             arg[0].append(arg[1])
+
+
+class AverageMeter():
+    def __init__(self):
+        self.reset()
+    
+    def reset(self):
+        self.avg = 0
+        self.count = 0
+    
+    def update(self, val, n):
+        self.avg = (self.avg  *self.count + val * n) / (self.count + n)
+        self.count += n
 
 
 def flush():

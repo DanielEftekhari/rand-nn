@@ -37,6 +37,11 @@ data_arg = add_argument_group('Data Params')
 data_arg.add_argument('--dataset', type=str, default='MNIST',
                       help='eiter <MNIST> or <CIFAR10>')
 
+# transforms
+transforms_arg = add_argument_group('Transforms Params')
+transforms_arg.add_argument('--normalize_input', type=parsebool, default=True,
+                            help='whether to normalize inputs (using mean & standard deviation of training set)')
+
 # training params
 train_arg = add_argument_group('Training Params')
 train_arg.add_argument('--epochs', type=int, default=15,
@@ -76,7 +81,7 @@ adversary_arg.add_argument('--targeted', type=parsebool, default=False,
 
 # other params
 misc_arg = add_argument_group('Misc.')
-misc_arg.add_argument('--model_name', type=str, default='',
+misc_arg.add_argument('--model_name', type=str, default='net',
                       help="model name")
 misc_arg.add_argument('--stdout_dir', type=str, default='./stdout',
                       help="directory to log program stdout to")
