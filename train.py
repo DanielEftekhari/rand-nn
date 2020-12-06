@@ -133,7 +133,7 @@ class Trainer():
         self.net.train()
         
         prefix = self.get_prefix(is_val_set)
-        metrics_epoch = collections.defaultdict(list)
+        metrics_epoch = collections.defaultdict(utils.AverageMeter)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
         for i, (x, y) in enumerate(dataloader):
             x, y = x.to(self.device), y.to(self.device)
@@ -145,15 +145,14 @@ class Trainer():
             self.optimizer.step()
             
             matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
-            utils.append((metrics_epoch['{}_loss'.format(prefix)], loss.item()),
-                        )
+            metrics_epoch['{}_loss'.format(prefix)].update(loss.item(), x.shape[0])
         self.summarize_metrics(metrics_epoch, matrix, prefix)
     
     def validate(self, dataloader, is_val_set=True, measure_entropy=True):
         self.net.eval()
         
         prefix = self.get_prefix(is_val_set)
-        metrics_epoch = collections.defaultdict(list)
+        metrics_epoch = collections.defaultdict(utils.AverageMeter)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
         with torch.no_grad():
             for i, (x, y) in enumerate(dataloader):
@@ -163,8 +162,7 @@ class Trainer():
                 loss = self.criterion(logits, y)
                 
                 matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
-                utils.append((metrics_epoch['{}_loss'.format(prefix)], loss.item()),
-                            )
+                metrics_epoch['{}_loss'.format(prefix)].update(loss.item(), x.shape[0])
                 
                 if measure_entropy:
                     probs = utils.get_class_probs(logits)
@@ -175,9 +173,8 @@ class Trainer():
                     probs_rand = utils.get_class_probs(logits_rand)
                     entropy_rand = utils.entropy(probs_rand)
                     
-                    utils.append((metrics_epoch['{}_entropy'.format(prefix)], entropy.item()),
-                                 (metrics_epoch['{}_entropy_rand'.format(prefix)], entropy_rand.item()),
-                                )
+                    metrics_epoch['{}_entropy'.format(prefix)].update(entropy.item(), x.shape[0])
+                    metrics_epoch['{}_entropy_rand'.format(prefix)].update(entropy_rand.item(), x.shape[0])
         self.summarize_metrics(metrics_epoch, matrix, prefix)
     
     @staticmethod
@@ -190,7 +187,7 @@ class Trainer():
     
     def summarize_metrics(self, metrics_epoch, matrix, prefix):
         for key in sorted(metrics_epoch.keys()):
-            self.metrics[key].append(utils.get_average(metrics_epoch[key]))
+            self.metrics[key].append(metrics_epoch[key].avg)
             print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], key, self.metrics[key][-1]))
         print(matrix)
         self.metrics['{}_acc'.format(prefix)].append(utils.calculate_acc(matrix))
