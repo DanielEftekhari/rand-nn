@@ -24,30 +24,9 @@ import utils
 
 
 class Trainer():
-    def __init__(self, cfg):
+    def __init__(self, cfg, device):
         self.cfg = cfg
-        
-        # set random seed
-        if self.cfg.random_seed != 0:
-            random_seed = self.cfg.random_seed
-        else:
-            random_seed = random.randint(1, 10000)
-        random.seed(random_seed)
-        np.random.seed(random_seed)
-        torch.manual_seed(random_seed)
-        
-        # set device as cuda or cpu
-        if self.cfg.use_gpu and torch.cuda.is_available():
-            # reproducibility using cuda
-            torch.cuda.manual_seed(random_seed)
-            cudnn.deterministic = True
-            cudnn.benchmark = False
-            self.device = torch.device('cuda')
-        else:
-            self.device = torch.device('cpu')
-            if self.cfg.use_gpu:
-                print('gpu option was set to <True>, but no cuda device was found')
-                utils.flush()
+        self.device = device
         
         # dataset parameters
         if self.cfg.dataset.lower() == 'mnist':
@@ -153,11 +132,7 @@ class Trainer():
     def train_one_epoch(self, dataloader, is_val_set=False):
         self.net.train()
         
-        if is_val_set:
-            dataset = 'val'
-        else:
-            dataset = 'train'
-        
+        prefix = self.get_prefix(is_val_set)
         metrics_epoch = collections.defaultdict(list)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
         for i, (x, y) in enumerate(dataloader):
@@ -170,18 +145,14 @@ class Trainer():
             self.optimizer.step()
             
             matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
-            utils.append((metrics_epoch['{}_loss'.format(dataset)], loss.item()),
+            utils.append((metrics_epoch['{}_loss'.format(prefix)], loss.item()),
                         )
-        self.summarize_metrics(metrics_epoch, matrix, dataset)
+        self.summarize_metrics(metrics_epoch, matrix, prefix)
     
     def validate(self, dataloader, is_val_set=True, measure_entropy=True):
         self.net.eval()
         
-        if is_val_set:
-            dataset = 'val'
-        else:
-            dataset = 'train'
-        
+        prefix = self.get_prefix(is_val_set)
         metrics_epoch = collections.defaultdict(list)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
         with torch.no_grad():
@@ -192,7 +163,7 @@ class Trainer():
                 loss = self.criterion(logits, y)
                 
                 matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
-                utils.append((metrics_epoch['{}_loss'.format(dataset)], loss.item()),
+                utils.append((metrics_epoch['{}_loss'.format(prefix)], loss.item()),
                             )
                 
                 if measure_entropy:
@@ -204,18 +175,26 @@ class Trainer():
                     probs_rand = utils.get_class_probs(logits_rand)
                     entropy_rand = utils.entropy(probs_rand)
                     
-                    utils.append((metrics_epoch['{}_entropy'.format(dataset)], entropy.item()),
-                                 (metrics_epoch['{}_entropy_rand'.format(dataset)], entropy_rand.item()),
+                    utils.append((metrics_epoch['{}_entropy'.format(prefix)], entropy.item()),
+                                 (metrics_epoch['{}_entropy_rand'.format(prefix)], entropy_rand.item()),
                                 )
-        self.summarize_metrics(metrics_epoch, matrix, dataset)
+        self.summarize_metrics(metrics_epoch, matrix, prefix)
     
-    def summarize_metrics(self, metrics_epoch, matrix, dataset):
+    @staticmethod
+    def get_prefix(is_val_set):
+        if is_val_set:
+            prefix = 'val'
+        else:
+            prefix = 'train'
+        return prefix
+    
+    def summarize_metrics(self, metrics_epoch, matrix, prefix):
         for key in sorted(metrics_epoch.keys()):
             self.metrics[key].append(utils.get_average(metrics_epoch[key]))
             print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], key, self.metrics[key][-1]))
         print(matrix)
-        self.metrics['{}_acc'.format(dataset)].append(utils.calculate_metrics(matrix))
-        print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_acc'.format(dataset), self.metrics['{}_acc'.format(dataset)][-1]))
+        self.metrics['{}_acc'.format(prefix)].append(utils.calculate_acc(matrix))
+        print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_acc'.format(prefix), self.metrics['{}_acc'.format(prefix)][-1]))
         utils.flush()
 
 
@@ -231,7 +210,29 @@ def main(cfg):
     if cfg.save_model:
         utils.make_dirs(os.path.join(cfg.model_dir, cfg.nn_type, cfg.model_name), replace=True)
     
-    trainer = Trainer(cfg)
+    # set random seed
+    if cfg.random_seed != 0:
+        random_seed = cfg.random_seed
+    else:
+        random_seed = random.randint(1, 10000)
+    random.seed(random_seed)
+    np.random.seed(random_seed)
+    torch.manual_seed(random_seed)
+    
+    # set device as cuda or cpu
+    if cfg.use_gpu and torch.cuda.is_available():
+        # reproducibility using cuda
+        torch.cuda.manual_seed(random_seed)
+        cudnn.deterministic = True
+        cudnn.benchmark = False
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+        if cfg.use_gpu:
+            print('gpu option was set to <True>, but no cuda device was found')
+            utils.flush()
+        
+    trainer = Trainer(cfg, device)
     trainer.train()
 
 

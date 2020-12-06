@@ -28,9 +28,8 @@ def entropy(probs):
     return torch.mean(-torch.sum(probs * torch.log(probs), dim=-1))
 
 
-def calculate_metrics(matrix):
-    acc = np.trace(matrix) / np.sum(matrix)
-    return acc
+def calculate_acc(matrix):
+    return np.trace(matrix) / np.sum(matrix)
 
 
 def confusion_matrix(y_hat, y, c_dim):
