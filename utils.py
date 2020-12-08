@@ -21,7 +21,7 @@ def get_class_outputs(logits):
 
 
 def get_class_probs(logits):
-    return torch.softmax(logits, dim=1)
+    return torch.softmax(logits, dim=-1)
 
 
 def entropy(probs):
@@ -40,14 +40,6 @@ def confusion_matrix(y_hat, y, c_dim):
     return matrix
 
 
-def get_average(a):
-    return np.mean(np.asarray(a))
-
-
-def get_sum(a):
-    return np.sum(np.asarray(a))
-
-
 def append(*args):
     for arg in args:
         if arg[1]:
@@ -63,7 +55,7 @@ class AverageMeter():
         self.count = 0
     
     def update(self, val, n):
-        self.avg = (self.avg  *self.count + val * n) / (self.count + n)
+        self.avg = (self.avg  * self.count + val * n) / (self.count + n)
         self.count += n
 
 
