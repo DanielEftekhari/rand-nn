@@ -18,9 +18,12 @@ def format_plot(x_label, y_label, title, fontsize=None):
     plt.tight_layout()
 
 
-def plot_line(x, ys, labels, x_label, y_label, cfg):
+def plot_line(x, ys, contours, labels, x_label, y_label, cfg):
     for i in range(len(ys)):
-        plt.plot(x, ys[i], label=labels[i])
+        if contours:
+            plt.errorbar(x, ys[i], yerr=contours[i], label=labels[i], alpha=ALPHA)
+        else:
+            plt.plot(x, ys[i], label=labels[i], alpha=ALPHA)
     format_plot(x_label, y_label, title='{} vs {}'.format(y_label, x_label))
     plt.savefig('{}/{}-vs-{}.png'.format(os.path.join(cfg.plot_dir, cfg.nn_type, cfg.model_name), y_label.lower(), x_label.lower()))
     plt.close()

@@ -1,5 +1,6 @@
 import sys
 import os
+import math
 import shutil
 
 import numpy as np
@@ -25,7 +26,7 @@ def get_class_probs(logits):
 
 
 def entropy(probs):
-    return torch.mean(-torch.sum(probs * torch.log(probs), dim=-1))
+    return -torch.sum(probs * torch.log(probs), dim=-1)
 
 
 def calculate_acc(matrix):
@@ -51,12 +52,26 @@ class AverageMeter():
         self.reset()
     
     def reset(self):
-        self.avg = 0
-        self.count = 0
+        self.avg = 0.
+        self.var = 0.
+        self.std = 0.
+        self.n = 0
     
-    def update(self, val, n):
-        self.avg = (self.avg  * self.count + val * n) / (self.count + n)
-        self.count += n
+    def update(self, vals, m):
+        sums = torch.sum(vals).item()
+        squared_sums = torch.sum(vals ** 2).item()
+        
+        new_avg = (self.avg * self.n + sums) / (self.n + m)
+        self.var = self.n / (self.n + m) * (self.var + self.avg ** 2) + 1 / (self.n + m) * squared_sums - new_avg ** 2
+        self.std = math.sqrt(self.var)
+        self.avg = new_avg
+        self.n += m
+
+
+def to_one_hot(y, c_dim):
+    y_one_hot = torch.zeros(size=(y.shape[0], c_dim))
+    y_one_hot.scatter_(1, y.unsqueeze(-1), 1)
+    return y_one_hot
 
 
 def flush():

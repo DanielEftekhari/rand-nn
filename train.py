@@ -18,6 +18,7 @@ import torchvision.transforms as transforms
 from config import get_config
 import activations
 import layers
+import loss_fns
 from models import FCNet, ConvNet
 from plotting import plot_line, plot_hist
 import utils
@@ -104,6 +105,7 @@ class Trainer():
         self.metrics['epochs'].append(0)
         self.validate(self.dataloader_train, is_val_set=False, measure_entropy=False)
         self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
+        self.save(epoch=0)
         
         for epoch in range(1, self.cfg.epochs+1):
             self.metrics['epochs'].append(epoch)
@@ -112,21 +114,23 @@ class Trainer():
             self.validate(self.dataloader_val)
             
             if self.cfg.plot:
-                plot_line(self.metrics['epochs'], [self.metrics['train_loss'], self.metrics['val_loss']], ['Training', 'Validation'], 'Epoch Number', 'Loss', self.cfg)
-                plot_line(self.metrics['epochs'], [self.metrics['train_acc'], self.metrics['val_acc']], ['Training', 'Validation'], 'Epoch Number', 'Accuracy', self.cfg)
-                plot_line(self.metrics['epochs'], [self.metrics['val_entropy'], self.metrics['val_entropy_rand']], ['Inputs', 'Random Inputs'], 'Epoch Number', 'Entropy', self.cfg)
+                plot_line(self.metrics['epochs'], [self.metrics['train_loss_avg'], self.metrics['val_loss_avg']], [self.metrics['train_loss_std'], self.metrics['val_loss_std']], ['Training', 'Validation'], 'Epoch Number', 'Loss', self.cfg)
+                plot_line(self.metrics['epochs'], [self.metrics['train_acc'], self.metrics['val_acc']], None, ['Training', 'Validation'], 'Epoch Number', 'Accuracy', self.cfg)
+                plot_line(self.metrics['epochs'], [self.metrics['val_entropy_avg'], self.metrics['val_entropy_rand_avg']], [self.metrics['val_entropy_std'], self.metrics['val_entropy_rand_std']], ['Inputs', 'Random Inputs'], 'Epoch Number', 'Entropy', self.cfg)
             
-            if self.metrics['val_loss'][-1] < self.best_loss:
-                self.best_loss = self.metrics['val_loss'][-1]
+            if self.metrics['val_loss_avg'][-1] < self.best_loss:
+                self.best_loss = self.metrics['val_loss_avg'][-1]
                 print('New best model at epoch {:0=3d} with val_loss {:.4f}'.format(epoch, self.best_loss))
                 utils.flush()
-                
-                if self.cfg.save_model:
-                    # save model when validation loss improves
-                    save_name = '{}-net_{}_epoch{:0=3d}_val_loss{:.4f}'.format(self.cfg.nn_type, self.cfg.model_name, epoch, self.best_loss)
-                    torch.save(self.net.state_dict(), os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}.pth'.format(save_name)))
-                    with open(os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.nn_type, self.cfg.model_name)), 'w') as file:
-                        file.write('{}.pth'.format(save_name))
+            
+            self.save(epoch)
+    
+    def save(self, epoch):
+        if self.cfg.save_model:
+            save_name = '{}-net_{}_epoch{:0=3d}_val_loss{:.4f}'.format(self.cfg.nn_type, self.cfg.model_name, epoch, self.metrics['val_loss_avg'][-1])
+            torch.save(self.net.state_dict(), os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}.pth'.format(save_name)))
+            with open(os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.nn_type, self.cfg.model_name)), 'w') as file:
+                file.write('{}.pth'.format(save_name))
     
     def train_one_epoch(self, dataloader, is_val_set=False):
         self.net.train()
@@ -134,7 +138,9 @@ class Trainer():
         prefix = self.get_prefix(is_val_set)
         metrics_epoch = collections.defaultdict(utils.AverageMeter)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
+        # test = []
         for i, (x, y) in enumerate(dataloader):
+            y_one_hot = utils.to_one_hot(y, self.c_dim).to(self.device)
             x, y = x.to(self.device), y.to(self.device)
             
             self.optimizer.zero_grad()
@@ -143,8 +149,14 @@ class Trainer():
             loss.backward()
             self.optimizer.step()
             
+            with torch.no_grad():
+                losses = loss_fns.cross_entropy_loss(logits, y_one_hot)
+                # test.extend(list(losses.cpu().detach().numpy()))
+            
             matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
-            metrics_epoch['{}_loss'.format(prefix)].update(loss.item(), x.shape[0])
+            metrics_epoch['{}_loss'.format(prefix)].update(losses, x.shape[0])
+            # print(np.mean(np.array(test)), metrics_epoch['{}_loss'.format(prefix)].avg)
+            # print(np.var(np.array(test)), metrics_epoch['{}_loss'.format(prefix)].var)
         self.summarize_metrics(metrics_epoch, matrix, prefix)
     
     def validate(self, dataloader, is_val_set=True, measure_entropy=True):
@@ -153,15 +165,22 @@ class Trainer():
         prefix = self.get_prefix(is_val_set)
         metrics_epoch = collections.defaultdict(utils.AverageMeter)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
+        # test = []
         with torch.no_grad():
             for i, (x, y) in enumerate(dataloader):
+                y_one_hot = utils.to_one_hot(y, self.c_dim).to(self.device)
                 x, y = x.to(self.device), y.to(self.device)
                 
                 logits = self.net(x)
                 loss = self.criterion(logits, y)
                 
+                losses = loss_fns.cross_entropy_loss(logits, y_one_hot)
+                # test.extend(list(losses.cpu().detach().numpy()))
+                
                 matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
-                metrics_epoch['{}_loss'.format(prefix)].update(loss.item(), x.shape[0])
+                metrics_epoch['{}_loss'.format(prefix)].update(losses, x.shape[0])
+                # print(np.mean(np.array(test)), metrics_epoch['{}_loss'.format(prefix)].avg)
+                # print(np.var(np.array(test)), metrics_epoch['{}_loss'.format(prefix)].var)
                 
                 if measure_entropy:
                     probs = utils.get_class_probs(logits)
@@ -172,8 +191,8 @@ class Trainer():
                     probs_rand = utils.get_class_probs(logits_rand)
                     entropy_rand = utils.entropy(probs_rand)
                     
-                    metrics_epoch['{}_entropy'.format(prefix)].update(entropy.item(), x.shape[0])
-                    metrics_epoch['{}_entropy_rand'.format(prefix)].update(entropy_rand.item(), x.shape[0])
+                    metrics_epoch['{}_entropy'.format(prefix)].update(entropy, x.shape[0])
+                    metrics_epoch['{}_entropy_rand'.format(prefix)].update(entropy_rand, x.shape[0])
         self.summarize_metrics(metrics_epoch, matrix, prefix)
     
     @staticmethod
@@ -186,8 +205,10 @@ class Trainer():
     
     def summarize_metrics(self, metrics_epoch, matrix, prefix):
         for key in sorted(metrics_epoch.keys()):
-            self.metrics[key].append(metrics_epoch[key].avg)
-            print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], key, self.metrics[key][-1]))
+            self.metrics['{}_{}'.format(key, 'avg')].append(metrics_epoch[key].avg)
+            self.metrics['{}_{}'.format(key, 'std')].append(metrics_epoch[key].std)
+            print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_{}'.format(key, 'avg'), self.metrics['{}_{}'.format(key, 'avg')][-1]))
+            print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_{}'.format(key, 'std'), self.metrics['{}_{}'.format(key, 'std')][-1]))
         print(matrix)
         self.metrics['{}_acc'.format(prefix)].append(utils.calculate_acc(matrix))
         print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_acc'.format(prefix), self.metrics['{}_acc'.format(prefix)][-1]))
