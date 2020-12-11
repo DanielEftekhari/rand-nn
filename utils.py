@@ -1,6 +1,5 @@
 import sys
 import os
-import math
 import shutil
 
 import numpy as np
@@ -23,6 +22,12 @@ def get_class_outputs(logits):
 
 def get_class_probs(logits):
     return torch.softmax(logits, dim=-1)
+
+
+def to_one_hot(y, c_dim):
+    y_one_hot = torch.zeros(size=(y.shape[0], c_dim))
+    y_one_hot.scatter_(1, y.unsqueeze(-1), 1)
+    return y_one_hot
 
 
 def entropy(probs):
@@ -63,15 +68,9 @@ class AverageMeter():
         
         new_avg = (self.avg * self.n + sums) / (self.n + m)
         self.var = self.n / (self.n + m) * (self.var + self.avg ** 2) + 1 / (self.n + m) * squared_sums - new_avg ** 2
-        self.std = math.sqrt(self.var)
+        self.std = self.var ** 0.5
         self.avg = new_avg
         self.n += m
-
-
-def to_one_hot(y, c_dim):
-    y_one_hot = torch.zeros(size=(y.shape[0], c_dim))
-    y_one_hot.scatter_(1, y.unsqueeze(-1), 1)
-    return y_one_hot
 
 
 def flush():

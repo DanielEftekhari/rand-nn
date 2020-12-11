@@ -88,7 +88,7 @@ class Trainer():
                 self.norm = None
             self.net = ConvNet(self.img_size, self.c_dim, self.cfg.conv_params, self.activation, self.norm, self.cfg).to(self.device)
         
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss(reduction='none')
         
         if self.cfg.use_sgd:
             self.optimizer = optim.SGD(params=self.net.parameters(), lr=self.cfg.lr, momentum=self.cfg.momentum, nesterov=self.cfg.use_nesterov)
@@ -138,25 +138,18 @@ class Trainer():
         prefix = self.get_prefix(is_val_set)
         metrics_epoch = collections.defaultdict(utils.AverageMeter)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
-        # test = []
         for i, (x, y) in enumerate(dataloader):
             y_one_hot = utils.to_one_hot(y, self.c_dim).to(self.device)
             x, y = x.to(self.device), y.to(self.device)
             
             self.optimizer.zero_grad()
             logits = self.net(x)
-            loss = self.criterion(logits, y)
-            loss.backward()
+            losses = self.criterion(logits, y)
+            torch.mean(losses).backward()
             self.optimizer.step()
-            
-            with torch.no_grad():
-                losses = loss_fns.cross_entropy_loss(logits, y_one_hot)
-                # test.extend(list(losses.cpu().detach().numpy()))
             
             matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
             metrics_epoch['{}_loss'.format(prefix)].update(losses, x.shape[0])
-            # print(np.mean(np.array(test)), metrics_epoch['{}_loss'.format(prefix)].avg)
-            # print(np.var(np.array(test)), metrics_epoch['{}_loss'.format(prefix)].var)
         self.summarize_metrics(metrics_epoch, matrix, prefix)
     
     def validate(self, dataloader, is_val_set=True, measure_entropy=True):
@@ -165,22 +158,16 @@ class Trainer():
         prefix = self.get_prefix(is_val_set)
         metrics_epoch = collections.defaultdict(utils.AverageMeter)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
-        # test = []
         with torch.no_grad():
             for i, (x, y) in enumerate(dataloader):
                 y_one_hot = utils.to_one_hot(y, self.c_dim).to(self.device)
                 x, y = x.to(self.device), y.to(self.device)
                 
                 logits = self.net(x)
-                loss = self.criterion(logits, y)
-                
-                losses = loss_fns.cross_entropy_loss(logits, y_one_hot)
-                # test.extend(list(losses.cpu().detach().numpy()))
+                losses = self.criterion(logits, y)
                 
                 matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
                 metrics_epoch['{}_loss'.format(prefix)].update(losses, x.shape[0])
-                # print(np.mean(np.array(test)), metrics_epoch['{}_loss'.format(prefix)].avg)
-                # print(np.var(np.array(test)), metrics_epoch['{}_loss'.format(prefix)].var)
                 
                 if measure_entropy:
                     probs = utils.get_class_probs(logits)
