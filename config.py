@@ -73,6 +73,11 @@ train_arg.add_argument('--shuffle', type=parsebool, default=True,
 # adversary_arg.add_argument('--targeted', type=parsebool, default=False,
 #                            help='targeted or untargeted attack')
 
+# database params
+db_arg = add_argument_group('Database Params')
+db_arg.add_argument('--db_path', type=str, default='./db/db.json',
+                    help="database path")
+
 # other params
 misc_arg = add_argument_group('Misc.')
 misc_arg.add_argument('--model_name', type=str, default='net',

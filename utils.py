@@ -20,7 +20,7 @@ class AverageMeter():
     
     def update(self, vals, m):
         sums = torch.sum(vals).item()
-        squared_sums = torch.sum(torch.square(vals)).item()
+        squared_sums = torch.sum(torch.abs(vals) ** 2).item()
         
         new_avg = (self.avg * self.n + sums) / (self.n + m)
         self.var = self.n / (self.n + m) * (self.var + abs(self.avg) ** 2) + 1 / (self.n + m) * squared_sums - abs(new_avg) ** 2

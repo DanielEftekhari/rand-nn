@@ -8,3 +8,6 @@ stdout/
 plots/
 data/
 ckpt/
+
+# DB files
+db.json

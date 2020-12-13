@@ -22,15 +22,17 @@ import layers
 import loss_fns
 from models import FCNet, ConvNet
 from plotting import plot_line, plot_hist
-import db
+from db import dbTiny
 import utils
 
 
 class Trainer():
     def __init__(self, cfg):
         self.cfg = cfg
-        self.init_db()
-                
+        
+        self.db = dbTiny.init_db(self.cfg.db_path)
+        self.init_post()
+        
         self.device = torch.device(self.cfg.device)
         
         # dataset parameters
@@ -95,7 +97,7 @@ class Trainer():
                 self.norm = None
             net = ConvNet
         self.net = net(self.img_size, self.c_dim, self.params, self.activation, self.norm).to(self.device)
-        self.post.params = self.params
+        self.post['params'] = self.params
         
         # # weight initialization - if not specified, weights are initialized using Kaiming uniform (He) initialization by default        
         # self.net.apply(layers.weights_init, self.cfg.weights_init.lower())
@@ -104,14 +106,12 @@ class Trainer():
         
         if self.cfg.optim.lower() == 'sgd':
             self.optimizer = optim.SGD(params=self.net.parameters(), lr=self.cfg.lr, momentum=self.cfg.momentum, nesterov=self.cfg.nesterov)
-            self.post.momentum = self.cfg.momentum
-            self.post.nesterov = self.cfg.nesterov
+            self.post['momentum'] = self.cfg.momentum
+            self.post['nesterov'] = self.cfg.nesterov
         else:
             self.optimizer = optim.Adam(params=self.net.parameters(), lr=self.cfg.lr, betas=(self.cfg.beta1, self.cfg.beta2))
-            self.post.beta1 = self.cfg.beta1
-            self.post.beta2 = self.cfg.beta2
-        
-        self.post.save()
+            self.post['beta1'] = self.cfg.beta1
+            self.post['beta2'] = self.cfg.beta2
     
     def train(self):
         # tracking training and validation stats over epochs
@@ -143,7 +143,8 @@ class Trainer():
                 utils.flush()
             
             self.save_model(epoch)
-            self.update_db()
+            self.update_post()
+        dbTiny.insert(self.db, self.post)
     
     def save_model(self, epoch):
         if self.cfg.save_model:
@@ -213,84 +214,84 @@ class Trainer():
         utils.flush()
     
     # TODO: modularize
-    def init_db(self):
-        run_number = db.get_last('run') + 1
-        self.post = db.Post(run=run_number)
+    def init_post(self):
+        last_run = dbTiny.get_last(self.db, 'run')
+        if last_run:
+            run = last_run + 1
+        else:
+            run = 1
+        self.post = {'run': run}
         
-        self.post.model_name = self.cfg.model_name.lower()
+        self.post['model_name'] = self.cfg.model_name.lower()
         
-        self.post.nn_type = self.cfg.nn_type.lower()
+        self.post['nn_type'] = self.cfg.nn_type.lower()
         
-        self.post.activation = self.cfg.activation.lower()
-        self.post.norm = self.cfg.norm.lower()
-        self.post.weights_init = self.cfg.weights_init.lower()
+        self.post['activation'] = self.cfg.activation.lower()
+        self.post['norm'] = self.cfg.norm.lower()
+        self.post['weights_init'] = self.cfg.weights_init.lower()
         
-        self.post.dataset = self.cfg.dataset.lower()
-        self.post.normalize_input = self.cfg.normalize_input
+        self.post['dataset'] = self.cfg.dataset.lower()
+        self.post['normalize_input'] = self.cfg.normalize_input
         
-        self.post.epochs = self.cfg.epochs
-        self.post.batch_size = self.cfg.batch_size
-        self.post.optim = self.cfg.optim.lower()
-        self.post.lr = self.cfg.lr
-        self.post.shuffle = self.cfg.shuffle
+        self.post['epochs'] = self.cfg.epochs
+        self.post['batch_size'] = self.cfg.batch_size
+        self.post['optim'] = self.cfg.optim.lower()
+        self.post['lr'] = self.cfg.lr
+        self.post['shuffle'] = self.cfg.shuffle
         
-        self.post.num_workers = self.cfg.num_workers
-        self.post.device = self.cfg.device.lower()
-        self.post.random_seed = self.cfg.random_seed
+        self.post['num_workers'] = self.cfg.num_workers
+        self.post['device'] = self.cfg.device.lower()
+        self.post['random_seed'] = self.cfg.random_seed
         
-        self.post.timestamp = self.cfg.time
+        self.post['timestamp'] = self.cfg.time
         
-        self.post.save()
-    
     # TODO: modularize
-    def update_db(self):
-        self.post.train_loss_avg = self.metrics['train_loss_avg']
-        self.post.train_loss_std = self.metrics['train_loss_std']
-        self.post.val_loss_avg = self.metrics['val_loss_avg']
-        self.post.val_loss_std = self.metrics['val_loss_std']
+    def update_post(self):
+        self.post['train_loss_avg'] = self.metrics['train_loss_avg']
+        self.post['train_loss_std'] = self.metrics['train_loss_std']
+        self.post['val_loss_avg'] = self.metrics['val_loss_avg']
+        self.post['val_loss_std'] = self.metrics['val_loss_std']
         
-        self.post.train_acc = self.metrics['train_acc']
-        self.post.val_acc = self.metrics['val_acc']
+        self.post['train_acc'] = self.metrics['train_acc']
+        self.post['val_acc'] = self.metrics['val_acc']
         
         best_epoch_train_loss = np.argmin(np.asarray(self.metrics['train_loss_avg']))
         best_epoch_train_acc = np.argmax(np.asarray(self.metrics['train_acc']))
         best_epoch_val_loss = np.argmin(np.asarray(self.metrics['val_loss_avg']))
         best_epoch_val_acc = np.argmax(np.asarray(self.metrics['val_acc']))
         
-        self.post.best_epoch_train_loss = best_epoch_train_loss
-        self.post.best_epoch_train_acc = best_epoch_train_acc
-        self.post.best_epoch_val_loss = best_epoch_val_loss
-        self.post.best_epoch_val_acc = best_epoch_val_acc
+        self.post['best_epoch_train_loss'] = best_epoch_train_loss
+        self.post['best_epoch_train_acc'] = best_epoch_train_acc
+        self.post['best_epoch_val_loss'] = best_epoch_val_loss
+        self.post['best_epoch_val_acc'] = best_epoch_val_acc
         
-        self.post.train_loss_at_best_train_loss = self.metrics['train_loss_avg'][best_epoch_train_loss]
-        self.post.train_acc_at_best_train_loss = self.metrics['train_acc'][best_epoch_train_loss]
-        self.post.val_loss_at_best_train_loss = self.metrics['val_loss_avg'][best_epoch_train_loss]
-        self.post.val_acc_at_best_train_loss = self.metrics['val_acc'][best_epoch_train_loss]
+        self.post['train_loss_at_best_train_loss'] = self.metrics['train_loss_avg'][best_epoch_train_loss]
+        self.post['train_acc_at_best_train_loss'] = self.metrics['train_acc'][best_epoch_train_loss]
+        self.post['val_loss_at_best_train_loss'] = self.metrics['val_loss_avg'][best_epoch_train_loss]
+        self.post['val_acc_at_best_train_loss'] = self.metrics['val_acc'][best_epoch_train_loss]
         
-        self.post.train_loss_at_best_train_acc = self.metrics['train_loss_avg'][best_epoch_train_acc]
-        self.post.train_acc_at_best_train_acc = self.metrics['train_acc'][best_epoch_train_acc]
-        self.post.val_loss_at_best_train_acc = self.metrics['val_loss_avg'][best_epoch_train_acc]
-        self.post.val_acc_at_best_train_acc = self.metrics['val_acc'][best_epoch_train_acc]
+        self.post['train_loss_at_best_train_acc'] = self.metrics['train_loss_avg'][best_epoch_train_acc]
+        self.post['train_acc_at_best_train_acc'] = self.metrics['train_acc'][best_epoch_train_acc]
+        self.post['val_loss_at_best_train_acc'] = self.metrics['val_loss_avg'][best_epoch_train_acc]
+        self.post['val_acc_at_best_train_acc'] = self.metrics['val_acc'][best_epoch_train_acc]
         
-        self.post.train_loss_at_best_val_loss = self.metrics['train_loss_avg'][best_epoch_val_loss]
-        self.post.train_acc_at_best_val_loss = self.metrics['train_acc'][best_epoch_val_loss]
-        self.post.val_loss_at_best_val_loss = self.metrics['val_loss_avg'][best_epoch_val_loss]
-        self.post.val_acc_at_best_val_loss = self.metrics['val_acc'][best_epoch_val_loss]
+        self.post['train_loss_at_best_val_loss'] = self.metrics['train_loss_avg'][best_epoch_val_loss]
+        self.post['train_acc_at_best_val_loss'] = self.metrics['train_acc'][best_epoch_val_loss]
+        self.post['val_loss_at_best_val_loss'] = self.metrics['val_loss_avg'][best_epoch_val_loss]
+        self.post['val_acc_at_best_val_loss'] = self.metrics['val_acc'][best_epoch_val_loss]
         
-        self.post.train_loss_at_best_val_acc = self.metrics['train_loss_avg'][best_epoch_val_acc]
-        self.post.train_acc_at_best_val_acc = self.metrics['train_acc'][best_epoch_val_acc]
-        self.post.val_loss_at_best_val_acc = self.metrics['val_loss_avg'][best_epoch_val_acc]
-        self.post.val_acc_at_best_val_acc = self.metrics['val_acc'][best_epoch_val_acc]
+        self.post['train_loss_at_best_val_acc'] = self.metrics['train_loss_avg'][best_epoch_val_acc]
+        self.post['train_acc_at_best_val_acc'] = self.metrics['train_acc'][best_epoch_val_acc]
+        self.post['val_loss_at_best_val_acc'] = self.metrics['val_loss_avg'][best_epoch_val_acc]
+        self.post['val_acc_at_best_val_acc'] = self.metrics['val_acc'][best_epoch_val_acc]
         
-        self.post.train_entropy_avg = self.metrics['train_entropy_avg']
-        self.post.train_entropy_std = self.metrics['train_entropy_std']
-        self.post.val_entropy_avg = self.metrics['val_entropy_avg']
-        self.post.val_entropy_std = self.metrics['val_entropy_std']
+        self.post['train_entropy_avg'] = self.metrics['train_entropy_avg']
+        self.post['train_entropy_std'] = self.metrics['train_entropy_std']
+        self.post['val_entropy_avg'] = self.metrics['val_entropy_avg']
+        self.post['val_entropy_std'] = self.metrics['val_entropy_std']
         
-        self.post.entropy_rand_avg = self.metrics['entropy_rand_avg']
-        self.post.entropy_rand_std = self.metrics['entropy_rand_std']
-        
-        self.post.save()
+        self.post['entropy_rand_avg'] = self.metrics['entropy_rand_avg']
+        self.post['entropy_rand_std'] = self.metrics['entropy_rand_std']
 
 
 def main(cfg):
