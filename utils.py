@@ -1,10 +1,36 @@
 import sys
 import os
+import datetime
 import shutil
 
 import numpy as np
 
 import torch
+
+
+class AverageMeter():
+    def __init__(self):
+        self.reset()
+    
+    def reset(self):
+        self.avg = 0.
+        self.var = 0.
+        self.std = 0.
+        self.n = 0
+    
+    def update(self, vals, m):
+        sums = torch.sum(vals).item()
+        squared_sums = torch.sum(torch.square(vals)).item()
+        
+        new_avg = (self.avg * self.n + sums) / (self.n + m)
+        self.var = self.n / (self.n + m) * (self.var + abs(self.avg) ** 2) + 1 / (self.n + m) * squared_sums - abs(new_avg) ** 2
+        self.std = self.var ** 0.5
+        self.avg = new_avg
+        self.n += m
+
+
+def get_current_time():
+    return str(datetime.datetime.utcnow()).replace(':', '-').replace(' ', '-')[0:-7]
 
 
 def make_dirs(path, replace):
@@ -16,7 +42,7 @@ def make_dirs(path, replace):
             os.makedirs(path)
 
 
-def read_txt(path, delimeter=' '):
+def read_params(path, delimeter=' '):
     res = []
     with open(path, 'r') as file:
         lines = file.readlines()
@@ -61,27 +87,6 @@ def append(*args):
     for arg in args:
         if arg[1]:
             arg[0].append(arg[1])
-
-
-class AverageMeter():
-    def __init__(self):
-        self.reset()
-    
-    def reset(self):
-        self.avg = 0.
-        self.var = 0.
-        self.std = 0.
-        self.n = 0
-    
-    def update(self, vals, m):
-        sums = torch.sum(vals).item()
-        squared_sums = torch.sum(vals ** 2).item()
-        
-        new_avg = (self.avg * self.n + sums) / (self.n + m)
-        self.var = self.n / (self.n + m) * (self.var + self.avg ** 2) + 1 / (self.n + m) * squared_sums - new_avg ** 2
-        self.std = self.var ** 0.5
-        self.avg = new_avg
-        self.n += m
 
 
 def flush():

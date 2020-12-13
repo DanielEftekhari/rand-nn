@@ -75,7 +75,7 @@ class Trainer():
         # parameters for each hidden layer is passed in as an argument
         self.activation = getattr(activations, self.cfg.activation.lower())
         if self.cfg.nn_type.lower()  == 'fc':
-            self.params = utils.read_txt(self.cfg.fc_params)
+            self.params = utils.read_params(self.cfg.fc_params)
             print(self.params)
             if self.cfg.norm.lower() == 'batch':
                 self.norm = nn.BatchNorm1d
@@ -85,7 +85,7 @@ class Trainer():
                 self.norm = None
             net = FCNet
         else:
-            self.params = utils.read_txt(self.cfg.conv_params)
+            self.params = utils.read_params(self.cfg.conv_params)
             print(self.params)
             if self.cfg.norm.lower() == 'batch':
                self.norm = nn.BatchNorm2d
@@ -294,16 +294,16 @@ class Trainer():
 
 
 def main(cfg):
+    current_time = utils.get_current_time()
+    print('current time is', current_time)
+    cfg.time = current_time
+    cfg.model_name = '{}_{}'.format(cfg.model_name, current_time)
+    
     # setting up output directories, and writing to stdout
     utils.make_dirs(os.path.join(cfg.stdout_dir, cfg.nn_type), replace=False)
     sys.stdout = open(r'./{}/{}/stdout_{}_{}.txt'.format(cfg.stdout_dir, cfg.nn_type, cfg.nn_type, cfg.model_name), 'w')
     print(cfg)
     utils.flush()
-    
-    current_time = str(datetime.datetime.utcnow()).replace(':', '-').replace(' ', '-')[0:-7]
-    print('current time is', current_time)
-    cfg.time = current_time
-    cfg.model_name = '{}_{}'.format(cfg.model_name, current_time)
     
     if cfg.plot:
         utils.make_dirs(os.path.join(cfg.plot_dir, cfg.nn_type, cfg.model_name), replace=True)
