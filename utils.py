@@ -16,6 +16,17 @@ def make_dirs(path, replace):
             os.makedirs(path)
 
 
+def read_txt(path, delimeter=' '):
+    res = []
+    with open(path, 'r') as file:
+        lines = file.readlines()
+        for line in lines:
+            line = line.split(delimeter)
+            line = [int(line[i]) for i in range(len(line))]
+            res.append(line)
+    return res
+
+
 def get_class_outputs(logits):
     return torch.argmax(logits, dim=-1)
 
