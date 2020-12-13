@@ -78,7 +78,6 @@ class Trainer():
         self.activation = getattr(activations, self.cfg.activation.lower())
         if self.cfg.nn_type.lower()  == 'fc':
             self.params = utils.read_params(self.cfg.fc_params)
-            print(self.params)
             if self.cfg.norm.lower() == 'batch':
                 self.norm = nn.BatchNorm1d
             elif self.cfg.norm.lower() == 'layer':
@@ -88,7 +87,6 @@ class Trainer():
             net = FCNet
         else:
             self.params = utils.read_params(self.cfg.conv_params)
-            print(self.params)
             if self.cfg.norm.lower() == 'batch':
                self.norm = nn.BatchNorm2d
             elif self.cfg.norm.lower() == 'layer':
@@ -255,10 +253,10 @@ class Trainer():
         self.post['train_acc'] = self.metrics['train_acc']
         self.post['val_acc'] = self.metrics['val_acc']
         
-        best_epoch_train_loss = np.argmin(np.asarray(self.metrics['train_loss_avg']))
-        best_epoch_train_acc = np.argmax(np.asarray(self.metrics['train_acc']))
-        best_epoch_val_loss = np.argmin(np.asarray(self.metrics['val_loss_avg']))
-        best_epoch_val_acc = np.argmax(np.asarray(self.metrics['val_acc']))
+        best_epoch_train_loss = int(np.argmin(np.asarray(self.metrics['train_loss_avg'])))
+        best_epoch_train_acc = int(np.argmax(np.asarray(self.metrics['train_acc'])))
+        best_epoch_val_loss = int(np.argmin(np.asarray(self.metrics['val_loss_avg'])))
+        best_epoch_val_acc = int(np.argmax(np.asarray(self.metrics['val_acc'])))
         
         self.post['best_epoch_train_loss'] = best_epoch_train_loss
         self.post['best_epoch_train_acc'] = best_epoch_train_acc
