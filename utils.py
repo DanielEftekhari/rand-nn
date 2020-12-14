@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 
-class AverageMeter():
+class Meter():
     def __init__(self):
         self.reset()
     
@@ -27,6 +27,19 @@ class AverageMeter():
         self.std = self.var ** 0.5
         self.avg = new_avg
         self.n += m
+
+
+def bootstrap_ci(data, num_sample=1000, alpha=0.025):
+    assert (len(data.shape) == 1)
+    n = data.shape[0]
+    x_bar = np.mean(data)
+    
+    samples = np.random.choice(data, size=(num_sample, n), replace=True)
+    delta = np.mean(samples, axis=1) - x_bar
+    delta = np.sort(delta)
+    
+    l, r = delta[int((num_sample-1) * (1-alpha))], delta[int((num_sample-1) * alpha)]
+    return x_bar-l, x_bar-r
 
 
 def get_current_time():
