@@ -296,6 +296,7 @@ class Trainer():
 def main(cfg):
     current_time = utils.get_current_time()
     
+    # override default-config parameters, with command-line-provided parameters
     preset_cfg = utils.load_json(cfg.config)
     cfg_json = vars(cfg)
     for key in cfg_json:
@@ -304,7 +305,8 @@ def main(cfg):
     cfg = Namespace(**preset_cfg)
     
     cfg_json = vars(cfg)
-    utils.save_json(cfg_json, './config/config_{}.json'.format(current_time))
+    utils.make_dirs('./config/save/', replace=False)
+    utils.save_json(cfg_json, './config/save/config_{}.json'.format(current_time))
     
     cfg.time = current_time
     cfg.model_name = '{}_{}'.format(cfg.model_name, current_time)
