@@ -1,7 +1,6 @@
 import itertools
 
 import numpy as np
-from scipy import special
 
 import torch
 import torch.nn as nn
@@ -10,13 +9,13 @@ import layers
 
 
 class FCNet(nn.Module):
-    def __init__(self, dim, c_dim, units, activation, norm):
+    def __init__(self, dims, c_dim, units, activation, norm):
         super(FCNet, self).__init__()
         
         self.activation = activation
         self.norm = norm
         
-        all_units = [np.product(dim)] + list(itertools.chain.from_iterable(units)) + [c_dim]
+        all_units = [np.product(dims)] + list(itertools.chain.from_iterable(units)) + [c_dim]
         
         self.norms, self.layers = nn.ModuleList(), nn.ModuleList()
         for i in range(len(all_units)-1):

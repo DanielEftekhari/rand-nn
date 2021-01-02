@@ -167,7 +167,7 @@ class Trainer():
         self.net.eval()
         
         prefix = self.get_prefix(is_val_set)
-        metrics_epoch = collections.defaultdict(utils.AverageMeter)
+        metrics_epoch = collections.defaultdict(utils.Meter)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
         with torch.no_grad():
             for i, (x, y) in enumerate(dataloader):
@@ -294,7 +294,6 @@ class Trainer():
 
 def main(cfg):
     current_time = utils.get_current_time()
-    print('current time is', current_time)
     cfg.time = current_time
     cfg.model_name = '{}_{}'.format(cfg.model_name, current_time)
     

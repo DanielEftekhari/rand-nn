@@ -39,11 +39,7 @@ def bootstrap_ci(data, num_sample=1000, alpha=0.025):
     delta = np.sort(delta)
     
     l, r = delta[int((num_sample-1) * (1-alpha))], delta[int((num_sample-1) * alpha)]
-    return x_bar-l, x_bar-r
-
-
-def get_current_time():
-    return str(datetime.datetime.utcnow()).replace(':', '-').replace(' ', '-')[0:-7]
+    return x_bar-l, x_bar, x_bar-r
 
 
 def make_dirs(path, replace):
@@ -100,6 +96,10 @@ def append(*args):
     for arg in args:
         if arg[1]:
             arg[0].append(arg[1])
+
+
+def get_current_time():
+    return str(datetime.datetime.utcnow()).replace(':', '-').replace(' ', '-')[0:-7]
 
 
 def flush():
