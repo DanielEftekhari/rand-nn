@@ -45,6 +45,8 @@ transforms_arg.add_argument('--normalize_input', type=checkbool,
 
 # training params
 train_arg = add_argument_group('Training Params')
+train_arg.add_argument('--train_random', type=checkbool,
+                       help='whether to train using random inputs')
 train_arg.add_argument('--epochs', type=int,
                        help='number of epochs to train for')
 train_arg.add_argument('--batch_size', type=int,
@@ -63,20 +65,6 @@ train_arg.add_argument('--beta2', type=float,
                        help='beta2 in adam optimizer')
 train_arg.add_argument('--shuffle', type=checkbool,
                        help='whether to shuffle training data')
-
-# # adversarial robustness params
-# # for evaluation only i.e. not for adversarial training
-# adversary_arg = add_argument_group('Adversarial Robustness Params')
-# adversary_arg.add_argument('--attack_type', type=str, default='Linf',
-#                            help='adversarial attack model')
-# adversary_arg.add_argument('--eps', type=float, default=0.1,
-#                            help='epsilon')
-# adversary_arg.add_argument('--nb_iter', type=int, default=20,
-#                            help='number of iterations for adversary')
-# adversary_arg.add_argument('--eps_iter', type=float, default=0.01,
-#                            help='eps_iter')
-# adversary_arg.add_argument('--targeted', type=checkbool, default=False,
-#                            help='targeted or untargeted attack')
 
 # database params
 db_arg = add_argument_group('Database Params')

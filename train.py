@@ -56,19 +56,20 @@ class Trainer():
         self.val_transforms = copy.deepcopy(self.train_transforms)
         
         # (if applicable) additional training set transforms defined here
-        # train_transforms.extend([])
+        # train_transforms.extend([
+        #                          ])
         
         self.dataset_train = self.dataset(root=self.data_path, train=True, download=True,
-                                transform=transforms.Compose(self.train_transforms),
-                                target_transform=None)
+                                          transform=transforms.Compose(self.train_transforms),
+                                          target_transform=None)
         self.dataloader_train = DataLoader(dataset=self.dataset_train, batch_size=self.cfg.batch_size, shuffle=self.cfg.shuffle,
-                                    num_workers=self.cfg.num_workers, pin_memory=True, drop_last=False)
+                                           num_workers=self.cfg.num_workers, pin_memory=True, drop_last=False)
         
         self.dataset_val = self.dataset(root=self.data_path, train=False, download=True,
-                            transform=transforms.Compose(self.val_transforms),
-                            target_transform=None)
+                                        transform=transforms.Compose(self.val_transforms),
+                                        target_transform=None)
         self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=self.cfg.batch_size, shuffle=False,
-                                    num_workers=self.cfg.num_workers, pin_memory=True, drop_last=False)
+                                         num_workers=self.cfg.num_workers, pin_memory=True, drop_last=False)
         
         # number of output classes
         targets = np.asarray(self.dataset_train.targets)
@@ -163,6 +164,16 @@ class Trainer():
             losses = self.criterion(logits, y)
             torch.mean(losses).backward()
             self.optimizer.step()
+            
+            if self.cfg.train_random:
+                x_rand = (torch.rand_like(x) - 0.5) / 0.5
+                y_rand = torch.ones(size=(x.shape[0], self.c_dim)).to(self.device) / self.c_dim
+                
+                self.optimizer.zero_grad()
+                logits_rand = self.net(x_rand)
+                losses = loss_fns.cross_entropy_loss(logits_rand, y_rand)
+                torch.mean(losses).backward()
+                self.optimizer.step()
     
     def validate(self, dataloader, is_val_set=True, measure_entropy=True):
         self.net.eval()
