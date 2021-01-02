@@ -3,6 +3,8 @@ import os
 import datetime
 import shutil
 
+import json
+
 import numpy as np
 
 import torch
@@ -60,6 +62,20 @@ def read_params(path, delimeter=' '):
             line = [int(line[i]) for i in range(len(line))]
             res.append(line)
     return res
+
+
+def load_json(filename):
+    if not os.path.isfile(filename):
+        return None
+    
+    with open(filename) as data_file:
+        data = json.load(data_file)
+    return data
+
+
+def save_json(data, filename):
+    with open(filename, 'w') as outfile:
+        json.dump(obj=data, fp=outfile, sort_keys=True, indent=4, separators=(',', ': '))
 
 
 def get_class_outputs(logits):

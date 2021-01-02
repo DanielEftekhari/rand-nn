@@ -3,7 +3,7 @@ import argparse
 parser = argparse.ArgumentParser()
 
 
-def parsebool(x):
+def checkbool(x):
     return x.lower() == 'true'
 
 
@@ -12,51 +12,56 @@ def add_argument_group(name):
     return arg
 
 
+# config params
+config_arg = add_argument_group('Config Params')
+config_arg.add_argument('--config', type=str, default='./config/default_config.json',
+                        help='json configuration file, to initialize configs with')
+
 # neural network params
 nn_arg = add_argument_group('Neural Network Params')
-nn_arg.add_argument('--nn_type', type=str, default='fc',
-                    help='whether to use a fully connected network or a convolutional network')
-nn_arg.add_argument('--fc_params', type=str, default='./params/fc_params.txt',
-                    help='number of units per fully connected layer')
-nn_arg.add_argument('--conv_params', type=str, default= './params/conv_params.txt',
-                    help='convolutional network parameters'
+nn_arg.add_argument('--nn_type', type=str,
+                    help='whether to use a fully connected <fc> network or a convolutional <conv> network')
+nn_arg.add_argument('--fc_params', type=str,
+                    help='path to txt file containing number of units per fully connected layer')
+nn_arg.add_argument('--conv_params', type=str,
+                    help='path to txt file containing convolutional network parameters'
                          'order of arguments is (in_channels, out_channels, kernel_size, stride, padding)')
-nn_arg.add_argument('--activation', type=str, default='relu',
+nn_arg.add_argument('--activation', type=str,
                     help='activation function, one of <sigmoid>, <tanh>, <relu>')
-nn_arg.add_argument('--norm', type=str, default='none',
+nn_arg.add_argument('--norm', type=str,
                     help='whether to use batch norm <batch>, layer norm <layer>, or no norm <none>')
-nn_arg.add_argument('--weights_init', type=str, default='default',
-                    help='weight initialization scheme, one of: <default>, <xavier_uniform>, <xavier_normal>, <kaiming_uniform>, <kaiming_normal>')
+nn_arg.add_argument('--weights_init', type=str,
+                    help='weight initialization scheme, one of: pytorch <default>, <xavier_uniform>, <xavier_normal>, <kaiming_uniform>, <kaiming_normal>')
 
 # dataset params
 dataset_arg = add_argument_group('Data Params')
-dataset_arg.add_argument('--dataset', type=str, default='MNIST',
-                      help='eiter <MNIST> or <CIFAR10>')
+dataset_arg.add_argument('--dataset', type=str,
+                         help='eiter <MNIST> or <CIFAR10>')
 
 # transforms
 transforms_arg = add_argument_group('Transforms Params')
-transforms_arg.add_argument('--normalize_input', type=parsebool, default=True,
+transforms_arg.add_argument('--normalize_input', type=checkbool,
                             help='whether to normalize inputs (using mean & standard deviation of training set)')
 
 # training params
 train_arg = add_argument_group('Training Params')
-train_arg.add_argument('--epochs', type=int, default=15,
+train_arg.add_argument('--epochs', type=int,
                        help='number of epochs to train for')
-train_arg.add_argument('--batch_size', type=int, default=128,
+train_arg.add_argument('--batch_size', type=int,
                        help='batch size during training')
-train_arg.add_argument('--optim', type=str, default='adam',
+train_arg.add_argument('--optim', type=str,
                        help='<sgd> or <adam>')
-train_arg.add_argument('--lr', type=float, default=1e-4,
+train_arg.add_argument('--lr', type=float,
                        help='learning rate')
-train_arg.add_argument('--momentum', type=float, default=0.9,
+train_arg.add_argument('--momentum', type=float,
                        help='momentum')
-train_arg.add_argument('--nesterov', type=parsebool, default=True,
+train_arg.add_argument('--nesterov', type=checkbool,
                        help='whether to use nesterov momentum')
-train_arg.add_argument('--beta1', type=float, default=0.9,
+train_arg.add_argument('--beta1', type=float,
                        help='beta1 in adam optimizer')
-train_arg.add_argument('--beta2', type=float, default=0.999,
+train_arg.add_argument('--beta2', type=float,
                        help='beta2 in adam optimizer')
-train_arg.add_argument('--shuffle', type=parsebool, default=True,
+train_arg.add_argument('--shuffle', type=checkbool,
                        help='whether to shuffle training data')
 
 # # adversarial robustness params
@@ -70,33 +75,33 @@ train_arg.add_argument('--shuffle', type=parsebool, default=True,
 #                            help='number of iterations for adversary')
 # adversary_arg.add_argument('--eps_iter', type=float, default=0.01,
 #                            help='eps_iter')
-# adversary_arg.add_argument('--targeted', type=parsebool, default=False,
+# adversary_arg.add_argument('--targeted', type=checkbool, default=False,
 #                            help='targeted or untargeted attack')
 
 # database params
 db_arg = add_argument_group('Database Params')
-db_arg.add_argument('--db_path', type=str, default='./db/db.json',
-                    help="database path")
+db_arg.add_argument('--db_path', type=str,
+                    help="path to database file")
 
 # other params
 misc_arg = add_argument_group('Misc.')
-misc_arg.add_argument('--model_name', type=str, default='net',
+misc_arg.add_argument('--model_name', type=str,
                       help="model name")
-misc_arg.add_argument('--stdout_dir', type=str, default='./stdout',
+misc_arg.add_argument('--stdout_dir', type=str,
                       help="directory to log program stdout to")
-misc_arg.add_argument('--model_dir', type=str, default='./ckpt',
+misc_arg.add_argument('--model_dir', type=str,
                       help='directory in which to save model checkpoints')
-misc_arg.add_argument('--num_workers', type=int, default=4,
+misc_arg.add_argument('--num_workers', type=int,
                       help='number of workers/subprocesses to use in dataloader')
-misc_arg.add_argument('--device', type=str, default='cuda',
+misc_arg.add_argument('--device', type=str,
                       help="<cuda> or <cpu>")
-misc_arg.add_argument('--random_seed', type=int, default=2,
+misc_arg.add_argument('--random_seed', type=int,
                       help='seed for reproducibility')
-misc_arg.add_argument('--save_model', type=parsebool, default=True,
+misc_arg.add_argument('--save_model', type=checkbool,
                       help='whether to save the model, if validation loss improves, at the end of each epoch')
-misc_arg.add_argument('--plot', type=parsebool, default=True,
+misc_arg.add_argument('--plot', type=checkbool,
                       help='whether to plot performance metrics')
-misc_arg.add_argument('--plot_dir', type=str, default='./plots',
+misc_arg.add_argument('--plot_dir', type=str,
                       help='directory in which to save plots')
 
 

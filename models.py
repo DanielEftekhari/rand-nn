@@ -17,7 +17,7 @@ class FCNet(nn.Module):
         
         all_units = [np.product(dims)] + list(itertools.chain.from_iterable(units)) + [c_dim]
         
-        self.norms, self.layers = nn.ModuleList(), nn.ModuleList()
+        self.layers, self.norms = nn.ModuleList(), nn.ModuleList()
         for i in range(len(all_units)-1):
             self.layers.append(nn.Linear(all_units[i], all_units[i+1], bias=True))
             if self.norm:
@@ -47,7 +47,7 @@ class ConvNet(nn.Module):
         assert (c_in == dims[0])
         h, w = dims[1], dims[2]
         
-        self.norms, self.layers = nn.ModuleList(), nn.ModuleList()
+        self.layers, self.norms = nn.ModuleList(), nn.ModuleList()
         for i in range(len(units)):
             c_in, c_out, k, s, p = units[i][0], units[i][1], units[i][2], units[i][3], units[i][4]
             self.layers.append(nn.Conv2d(in_channels=c_in, out_channels=c_out, kernel_size=k, stride=s, padding=p, bias=True))

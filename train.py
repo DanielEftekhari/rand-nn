@@ -1,5 +1,6 @@
 import sys
 import os
+from argparse import Namespace
 import datetime
 import collections
 import copy
@@ -16,7 +17,7 @@ from torchvision.datasets import MNIST, CIFAR10
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 
-from config import get_config
+from config.config import get_config
 import activations
 import layers
 import loss_fns
@@ -294,6 +295,17 @@ class Trainer():
 
 def main(cfg):
     current_time = utils.get_current_time()
+    
+    preset_cfg = utils.load_json(cfg.config)
+    cfg_json = vars(cfg)
+    for key in cfg_json:
+        if cfg_json[key] is not None:
+            preset_cfg[key] = cfg_json[key]
+    cfg = Namespace(**preset_cfg)
+    
+    cfg_json = vars(cfg)
+    utils.save_json(cfg_json, './config/config_{}.json'.format(current_time))
+    
     cfg.time = current_time
     cfg.model_name = '{}_{}'.format(cfg.model_name, current_time)
     
