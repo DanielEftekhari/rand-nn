@@ -2,6 +2,7 @@ import sys
 import os
 import datetime
 import shutil
+import math
 
 import json
 
@@ -21,11 +22,11 @@ class Meter():
         self.n = 0
     
     def update(self, vals, m):
-        sums = torch.sum(vals).item()
-        squared_sums = torch.sum(torch.abs(vals) ** 2).item()
+        sums = np.sum(vals)
+        squared_sums = np.sum(np.square(vals))
         
         new_avg = (self.avg * self.n + sums) / (self.n + m)
-        self.var = self.n / (self.n + m) * (self.var + abs(self.avg) ** 2) + 1 / (self.n + m) * squared_sums - abs(new_avg) ** 2
+        self.var = self.n / (self.n + m) * (self.var + math.pow(self.avg, 2)) + 1 / (self.n + m) * squared_sums - math.pow(new_avg, 2)
         self.std = self.var ** 0.5
         self.avg = new_avg
         self.n += m
@@ -101,9 +102,7 @@ def calculate_acc(matrix):
 
 def confusion_matrix(y_hat, y, c_dim):
     matrix = np.zeros((c_dim, c_dim), dtype=np.uint32)
-    for i in range(c_dim):
-        for j in range(c_dim):
-            matrix[i, j] = ((y_hat == j) * (y == i)).type(torch.FloatTensor).sum()
+    np.add.at(matrix, [y, y_hat], 1)
     return matrix
 
 
