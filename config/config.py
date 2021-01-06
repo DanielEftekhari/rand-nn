@@ -45,8 +45,8 @@ transforms_arg.add_argument('--normalize_input', type=checkbool,
 
 # training params
 train_arg = add_argument_group('Training Params')
-train_arg.add_argument('--train_random', type=checkbool,
-                       help='whether to train using random inputs')
+train_arg.add_argument('--train_random', type=int,
+                       help='number of epochs to pretrain with random inputs & random labels')
 train_arg.add_argument('--epochs', type=int,
                        help='number of epochs to train for')
 train_arg.add_argument('--batch_size', type=int,

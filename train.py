@@ -102,7 +102,7 @@ class Trainer():
         # # weight initialization - if not specified, weights are initialized using Kaiming uniform (He) initialization by default        
         # self.net.apply(layers.weights_init, self.cfg.weights_init.lower())
         
-        self.criterion = nn.CrossEntropyLoss(reduction='none')
+        self.criterion = loss_fns.cross_entropy_loss
         
         if self.cfg.optim.lower() == 'sgd':
             self.optimizer = optim.SGD(params=self.net.parameters(), lr=self.cfg.lr, momentum=self.cfg.momentum, nesterov=self.cfg.nesterov)
@@ -125,10 +125,10 @@ class Trainer():
         self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
         self.save_model(epoch=0)
         
-        for epoch in range(1, self.cfg.epochs+1):
+        for epoch in range(1, self.cfg.train_random+self.cfg.epochs+1):
             self.metrics['epochs'].append(epoch)
             
-            self.train_one_epoch(self.dataloader_train)
+            self.train_one_epoch(self.dataloader_train, epoch <= self.cfg.train_random)
             self.validate(self.dataloader_train, is_val_set=False, measure_entropy=True)
             self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
             
@@ -153,27 +153,21 @@ class Trainer():
             with open(os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.nn_type, self.cfg.model_name)), 'w') as file:
                 file.write('{}.pth'.format(save_name))
     
-    def train_one_epoch(self, dataloader, is_val_set=False):
+    def train_one_epoch(self, dataloader, train_random):
         self.net.train()
         
         for i, (x, y) in enumerate(dataloader):
-            x, y = x.to(self.device), y.to(self.device)
+            if train_random:
+                x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
+                y_one_hot = torch.ones(size=(x.shape[0], self.c_dim)).to(self.device) / self.c_dim
+            else:
+                x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
             
             self.optimizer.zero_grad()
             logits = self.net(x)
-            losses = self.criterion(logits, y)
+            losses = self.criterion(logits, y_one_hot)
             torch.mean(losses).backward()
             self.optimizer.step()
-            
-            if self.cfg.train_random:
-                x_rand = (torch.rand_like(x) - 0.5) / 0.5
-                y_rand = torch.ones(size=(x.shape[0], self.c_dim)).to(self.device) / self.c_dim
-                
-                self.optimizer.zero_grad()
-                logits_rand = self.net(x_rand)
-                losses = loss_fns.cross_entropy_loss(logits_rand, y_rand)
-                torch.mean(losses).backward()
-                self.optimizer.step()
     
     def validate(self, dataloader, is_val_set=True, measure_entropy=True):
         self.net.eval()
@@ -183,10 +177,11 @@ class Trainer():
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
         with torch.no_grad():
             for i, (x, y) in enumerate(dataloader):
-                x, y = x.to(self.device), y.to(self.device)
+                x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
+                y = y.to(self.device)
                 
                 logits = self.net(x)
-                losses = self.criterion(logits, y)
+                losses = self.criterion(logits, y_one_hot)
                 
                 matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits), y, self.c_dim)
                 metrics_epoch['{}_loss'.format(prefix)].update(losses, x.shape[0])
@@ -254,7 +249,7 @@ class Trainer():
         self.post['random_seed'] = self.cfg.random_seed
         
         self.post['timestamp'] = self.cfg.time
-        
+    
     # TODO: modularize
     def update_post(self):
         self.post['train_loss_avg'] = self.metrics['train_loss_avg']
