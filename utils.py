@@ -92,8 +92,14 @@ def to_one_hot(y, c_dim):
     return y_one_hot
 
 
-def entropy(probs):
+def entropy_naive(logits):
+    probs = get_class_probs(logits)
     return -torch.sum(probs * torch.log(probs), dim=-1)
+
+
+def entropy(logits):
+    c = torch.max(logits, dim=-1)[0]
+    return entropy_naive(logits - c[:, None])
 
 
 def calculate_acc(matrix):

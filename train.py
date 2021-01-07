@@ -188,16 +188,14 @@ class Trainer():
                 metrics_epoch['{}_loss'.format(prefix)].update(losses.cpu().detach().numpy(), x.shape[0])
                 
                 if measure_entropy:
-                    probs = utils.get_class_probs(logits)
-                    entropy = utils.entropy(probs)
+                    entropy = utils.entropy(logits)
                     metrics_epoch['{}_entropy'.format(prefix)].update(entropy.cpu().detach().numpy(), x.shape[0])
                     
                     if is_val_set:
                         # x_rand = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
                         x_rand = torch.randn(size=x.shape).to(self.device)
                         logits_rand = self.net(x_rand)
-                        probs_rand = utils.get_class_probs(logits_rand)
-                        entropy_rand = utils.entropy(probs_rand)
+                        entropy_rand = utils.entropy(logits_rand)
                         metrics_epoch['entropy_rand'].update(entropy_rand.cpu().detach().numpy(), x.shape[0])
         self.summarize_metrics(metrics_epoch, matrix, prefix)
     
