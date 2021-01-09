@@ -123,19 +123,25 @@ class Trainer():
     def train(self):
         # tracking training and validation stats over epochs
         self.metrics = collections.defaultdict(list)
+        self.metrics['epochs'].append(0)
+        
         # best model is defined as model with best performing validation loss
         self.best_loss = float('inf')
         
+        # fixed noise input
+        self.fixed_noise = torch.randn(size=(self.cfg.batch_size, *self.img_size)).to(self.device)
+        
         # measure performance before any training is done
-        self.metrics['epochs'].append(0)
         self.validate(self.dataloader_train, is_val_set=False, measure_entropy=True)
         self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
+        
+        # save initial weights
         self.save_model(epoch=0)
         
         for epoch in range(1, self.cfg.epochs+1):
             self.metrics['epochs'].append(epoch)
             
-            self.train_one_epoch(self.dataloader_train, self.metrics_epoch['entropy_rand'].avg <= self.thresh_ent)
+            self.train_one_epoch(self.dataloader_train)
             self.validate(self.dataloader_train, is_val_set=False, measure_entropy=True)
             self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
             
@@ -160,21 +166,20 @@ class Trainer():
             with open(os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.nn_type, self.cfg.model_name)), 'w') as file:
                 file.write('{}.pth'.format(save_name))
     
-    def train_one_epoch(self, dataloader, train_random):
+    def train_one_epoch(self, dataloader):
         self.net.train()
         
-        if train_random:
-            print('training on random inputs & random labels')
-        else:
-            print('training on actual dataset & actual labels')
-        
         for i, (x, y) in enumerate(dataloader):
-            if train_random:
-                # x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
-                x = torch.randn(size=x.shape).to(self.device)
-                y_one_hot = torch.ones(size=(x.shape[0], self.c_dim)).to(self.device) / self.c_dim
-            else:
-                x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
+            x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
+            if (i+1) % 10 == 0:
+                with torch.no_grad():
+                    logits = self.net(self.fixed_noise)
+                    entropy = utils.entropy(logits)
+                if torch.mean(entropy).item() <= self.thresh_ent:
+                    print('training on random inputs & random labels for minibatch {}'.format(i))
+                    # x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
+                    x = torch.randn(size=x.shape).to(self.device)
+                    y_one_hot = torch.ones(size=(x.shape[0], self.c_dim)).to(self.device) / self.c_dim
             
             self.optimizer.zero_grad()
             logits = self.net(x)
