@@ -128,8 +128,8 @@ class Trainer():
         # best model is defined as model with best performing validation loss
         self.best_loss = float('inf')
         
-        # fixed noise input
-        self.fixed_noise = torch.randn(size=(self.cfg.batch_size, *self.img_size)).to(self.device)
+        # # fixed noise input
+        # self.fixed_noise = torch.randn(size=(self.cfg.batch_size, *self.img_size)).to(self.device)
         
         # measure performance before any training is done
         self.validate(self.dataloader_train, is_val_set=False, measure_entropy=True)
@@ -173,9 +173,10 @@ class Trainer():
             x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
             if self.cfg.train_random and (i+1) % 10 == 0:
                 with torch.no_grad():
-                    logits = self.net(self.fixed_noise)
-                    entropy = utils.entropy(logits)
-                if torch.mean(entropy).item() <= self.thresh_ent:
+                    x_rand = torch.randn(size=x.shape).to(self.device)
+                    logits_rand = self.net(x_rand)
+                    entropy_rand = utils.entropy(logits_rand)
+                if torch.mean(entropy_rand).item() <= self.thresh_ent:
                     print('training on random inputs & random labels for minibatch {}'.format(i))
                     # x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
                     x = torch.randn(size=x.shape).to(self.device)
