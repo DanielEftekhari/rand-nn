@@ -4,6 +4,7 @@ from argparse import Namespace
 import datetime
 import collections
 import copy
+import math
 import random
 
 import numpy as np
@@ -74,6 +75,12 @@ class Trainer():
         # number of output classes
         targets = np.asarray(self.dataset_train.targets)
         self.c_dim = np.unique(targets).shape[0]
+
+        # entropy threshold (arbitrary value right now of (1 - 1/e) * h_max) for training with random inputs
+        self.max_ent = math.log(self.c_dim)
+        # self.thresh_ent = (1. - 1. / math.e) * self.max_ent
+        self.thresh_ent = self.cfg.train_random * self.max_ent
+        # self.thresh_ent = self.max_ent / math.e
         
         # define model
         # parameters for each hidden layer is passed in as an argument
@@ -125,10 +132,10 @@ class Trainer():
         self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
         self.save_model(epoch=0)
         
-        for epoch in range(1, self.cfg.train_random+self.cfg.epochs+1):
+        for epoch in range(1, self.cfg.epochs+1):
             self.metrics['epochs'].append(epoch)
             
-            self.train_one_epoch(self.dataloader_train, epoch <= self.cfg.train_random)
+            self.train_one_epoch(self.dataloader_train, self.metrics_epoch['entropy_rand'].avg <= self.thresh_ent)
             self.validate(self.dataloader_train, is_val_set=False, measure_entropy=True)
             self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
             
@@ -156,6 +163,11 @@ class Trainer():
     def train_one_epoch(self, dataloader, train_random):
         self.net.train()
         
+        if train_random:
+            print('training on random inputs & random labels')
+        else:
+            print('training on actual dataset & actual labels')
+        
         for i, (x, y) in enumerate(dataloader):
             if train_random:
                 # x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
@@ -174,7 +186,7 @@ class Trainer():
         self.net.eval()
         
         prefix = self.get_prefix(is_val_set)
-        metrics_epoch = collections.defaultdict(utils.Meter)
+        self.metrics_epoch = collections.defaultdict(utils.Meter)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
         with torch.no_grad():
             for i, (x, y) in enumerate(dataloader):
@@ -185,19 +197,19 @@ class Trainer():
                 losses = self.criterion(logits, y_one_hot)
                 
                 matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits).cpu().detach().numpy(), y.cpu().detach().numpy(), self.c_dim)
-                metrics_epoch['{}_loss'.format(prefix)].update(losses.cpu().detach().numpy(), x.shape[0])
+                self.metrics_epoch['{}_loss'.format(prefix)].update(losses.cpu().detach().numpy(), x.shape[0])
                 
                 if measure_entropy:
                     entropy = utils.entropy(logits)
-                    metrics_epoch['{}_entropy'.format(prefix)].update(entropy.cpu().detach().numpy(), x.shape[0])
+                    self.metrics_epoch['{}_entropy'.format(prefix)].update(entropy.cpu().detach().numpy(), x.shape[0])
                     
                     if is_val_set:
                         # x_rand = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
                         x_rand = torch.randn(size=x.shape).to(self.device)
                         logits_rand = self.net(x_rand)
                         entropy_rand = utils.entropy(logits_rand)
-                        metrics_epoch['entropy_rand'].update(entropy_rand.cpu().detach().numpy(), x.shape[0])
-        self.summarize_metrics(metrics_epoch, matrix, prefix)
+                        self.metrics_epoch['entropy_rand'].update(entropy_rand.cpu().detach().numpy(), x.shape[0])
+        self.summarize_metrics(matrix, prefix)
     
     @staticmethod
     def get_prefix(is_val_set):
@@ -207,10 +219,10 @@ class Trainer():
             prefix = 'train'
         return prefix
     
-    def summarize_metrics(self, metrics_epoch, matrix, prefix):
-        for key in sorted(metrics_epoch.keys()):
-            self.metrics['{}_{}'.format(key, 'avg')].append(metrics_epoch[key].avg)
-            self.metrics['{}_{}'.format(key, 'std')].append(metrics_epoch[key].std)
+    def summarize_metrics(self, matrix, prefix):
+        for key in sorted(self.metrics_epoch.keys()):
+            self.metrics['{}_{}'.format(key, 'avg')].append(self.metrics_epoch[key].avg)
+            self.metrics['{}_{}'.format(key, 'std')].append(self.metrics_epoch[key].std)
             print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_{}'.format(key, 'avg'), self.metrics['{}_{}'.format(key, 'avg')][-1]))
             print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_{}'.format(key, 'std'), self.metrics['{}_{}'.format(key, 'std')][-1]))
         print(matrix)

@@ -25,6 +25,6 @@
     "save_model": true,
     "shuffle": true,
     "stdout_dir": "./stdout",
-    "train_random": 0,
+    "train_random": 0.0,
     "weights_init": "default"
 }
