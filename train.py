@@ -171,7 +171,7 @@ class Trainer():
         
         for i, (x, y) in enumerate(dataloader):
             x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
-            if (i+1) % 10 == 0:
+            if self.cfg.train_random and (i+1) % 10 == 0:
                 with torch.no_grad():
                     logits = self.net(self.fixed_noise)
                     entropy = utils.entropy(logits)
