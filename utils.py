@@ -93,10 +93,6 @@ def to_one_hot(y, c_dim):
     return y_one_hot
 
 
-def max_ent(c_dim):
-    return math.log(c_dim)
-
-
 def entropy_naive(logits):
     probs = get_class_probs(logits)
     return -torch.sum(probs * torch.log(probs), dim=-1)

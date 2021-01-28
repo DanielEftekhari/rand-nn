@@ -77,7 +77,7 @@ class Trainer():
         self.c_dim = np.unique(targets).shape[0]
 
         # entropy threshold (arbitrary value right now of (1 - 1/e) * h_max) for training with random inputs
-        self.max_ent = utils.max_ent(self.c_dim)
+        self.max_ent = math.log(self.c_dim)
         # self.thresh_ent = (1. - 1. / math.e) * self.max_ent
         self.thresh_ent = self.cfg.train_random * self.max_ent
         # self.thresh_ent = self.max_ent / math.e
@@ -109,8 +109,7 @@ class Trainer():
         # # weight initialization - if not specified, weights are initialized using Kaiming uniform (He) initialization by default        
         # self.net.apply(layers.weights_init, self.cfg.weights_init.lower())
         
-        self.criterion1 = loss_fns.cross_entropy_loss
-        self.criterion2 = loss_fns.kl_p_to_u
+        self.criterion = loss_fns.cross_entropy_loss
         
         if self.cfg.optim.lower() == 'sgd':
             self.optimizer = optim.SGD(params=self.net.parameters(), lr=self.cfg.lr, momentum=self.cfg.momentum, nesterov=self.cfg.nesterov)
@@ -172,7 +171,6 @@ class Trainer():
         
         for i, (x, y) in enumerate(dataloader):
             x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
-            rand = False
             if self.cfg.train_random and (i+1) % 10 == 0:
                 with torch.no_grad():
                     x_rand = torch.randn(size=x.shape).to(self.device)
@@ -180,17 +178,13 @@ class Trainer():
                     entropy_rand = utils.entropy(logits_rand)
                 if torch.mean(entropy_rand).item() <= self.thresh_ent:
                     print('training on random inputs & random labels for minibatch {}'.format(i))
-                    rand = True
                     # x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
                     x = torch.randn(size=x.shape).to(self.device)
                     y_one_hot = torch.ones(size=(x.shape[0], self.c_dim)).to(self.device) / self.c_dim
             
             self.optimizer.zero_grad()
             logits = self.net(x)
-            if rand:
-                losses = self.criterion2(logits, y_one_hot)
-            else:
-                losses = self.criterion1(logits, y_one_hot)
+            losses = self.criterion(logits, y_one_hot)
             torch.mean(losses).backward()
             self.optimizer.step()
     
@@ -206,7 +200,7 @@ class Trainer():
                 y = y.to(self.device)
                 
                 logits = self.net(x)
-                losses = self.criterion1(logits, y_one_hot)
+                losses = self.criterion(logits, y_one_hot)
                 
                 matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits).cpu().detach().numpy(), y.cpu().detach().numpy(), self.c_dim)
                 self.metrics_epoch['{}_loss'.format(prefix)].update(losses.cpu().detach().numpy(), x.shape[0])
