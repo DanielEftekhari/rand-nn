@@ -8,7 +8,6 @@ import math
 import random
 
 import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -362,7 +361,7 @@ def main(cfg):
         cudnn.deterministic = True
         cudnn.benchmark = False
     else:
-        if cfg.device == 'cuda':
+        if cfg.device.lower() == 'cuda':
             print('device option was set to <cuda>, but no cuda device was found')
             utils.flush()
             cfg.device = 'cpu'
