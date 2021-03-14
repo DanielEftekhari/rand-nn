@@ -75,11 +75,9 @@ class Trainer():
         targets = np.asarray(self.dataset_train.targets)
         self.c_dim = np.unique(targets).shape[0]
 
-        # entropy threshold (arbitrary value right now of (1 - 1/e) * h_max) for training with random inputs
+        # entropy threshold
         self.max_ent = math.log(self.c_dim)
-        # self.thresh_ent = (1. - 1. / math.e) * self.max_ent
         self.thresh_ent = self.cfg.train_random * self.max_ent
-        # self.thresh_ent = self.max_ent / math.e
         
         # define model
         # parameters for each hidden layer is passed in as an argument
@@ -165,9 +163,20 @@ class Trainer():
             with open(os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.nn_type, self.cfg.model_name)), 'w') as file:
                 file.write('{}.pth'.format(save_name))
     
+    def get_activation(self, name):
+        def hook(model, input, output):
+            self.features[name] = output.detach()
+        return hook
+    
+    def hook(self):
+        for name in self.net.names:
+            self.net.layers[name].register_forward_hook(self.get_activation(name))
+    
     def train_one_epoch(self, dataloader):
         self.net.train()
         
+        self.features = {}
+        self.hook()
         for i, (x, y) in enumerate(dataloader):
             x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
             if self.cfg.train_random and (i+1) % 10 == 0:
