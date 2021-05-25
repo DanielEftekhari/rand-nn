@@ -106,6 +106,10 @@ def calculate_acc(matrix):
     return np.trace(matrix) / np.sum(matrix)
 
 
+def max_ent(c_dim):
+    return math.log(c_dim)
+
+
 def confusion_matrix(y_hat, y, c_dim):
     matrix = np.zeros((c_dim, c_dim), dtype=np.uint32)
     np.add.at(matrix, [y, y_hat], 1)

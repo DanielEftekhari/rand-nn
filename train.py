@@ -75,8 +75,8 @@ class Trainer():
         targets = np.asarray(self.dataset_train.targets)
         self.c_dim = np.unique(targets).shape[0]
 
-        # entropy threshold
-        self.max_ent = math.log(self.c_dim)
+        # maximum entropy threshold for training with random inputs
+        self.max_ent = utils.max_ent(self.c_dim)
         self.thresh_ent = self.cfg.train_random * self.max_ent
         
         # define model
