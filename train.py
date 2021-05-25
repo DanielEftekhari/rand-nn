@@ -77,7 +77,7 @@ class Trainer():
         self.c_dim = np.unique(targets).shape[0]
 
         # entropy threshold (arbitrary value right now of (1 - 1/e) * h_max) for training with random inputs
-        self.max_ent = math.log(self.c_dim)
+        self.max_ent = utils.max_ent(self.c_dim)
         # self.thresh_ent = (1. - 1. / math.e) * self.max_ent
         self.thresh_ent = self.cfg.train_random * self.max_ent
         # self.thresh_ent = self.max_ent / math.e
