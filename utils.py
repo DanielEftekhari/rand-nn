@@ -83,7 +83,8 @@ def get_class_outputs(logits):
 
 
 def get_class_probs(logits):
-    return torch.softmax(logits, dim=-1)
+    c = torch.max(logits, dim=-1)[0]
+    return torch.softmax(logits - c[:, None], dim=-1)
 
 
 def to_one_hot(y, c_dim):
@@ -92,22 +93,16 @@ def to_one_hot(y, c_dim):
     return y_one_hot
 
 
-def entropy_naive(logits):
-    probs = get_class_probs(logits)
-    return -torch.sum(probs * torch.log(probs), dim=-1)
-
-
-def entropy(logits):
-    c = torch.max(logits, dim=-1)[0]
-    return entropy_naive(logits - c[:, None])
-
-
-def calculate_acc(matrix):
-    return np.trace(matrix) / np.sum(matrix)
+def entropy(probs):
+    return -torch.sum(torch.where(probs > 0, probs * torch.log(probs), torch.Tensor([0.]).to(probs.device)), dim=-1)
 
 
 def max_ent(c_dim):
     return math.log(c_dim)
+
+
+def calculate_acc(matrix):
+    return np.trace(matrix) / np.sum(matrix)
 
 
 def confusion_matrix(y_hat, y, c_dim):

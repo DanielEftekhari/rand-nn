@@ -106,7 +106,7 @@ class Trainer():
         # # weight initialization - if not specified, weights are initialized using Kaiming uniform (He) initialization by default        
         # self.net.apply(layers.weights_init, self.cfg.weights_init.lower())
         
-        self.criterion = loss_fns.cross_entropy_loss
+        self.criterion = loss_fns.kl_y_to_p
         
         if self.cfg.optim.lower() == 'sgd':
             self.optimizer = optim.SGD(params=self.net.parameters(), lr=self.cfg.lr, momentum=self.cfg.momentum, nesterov=self.cfg.nesterov)
@@ -183,7 +183,7 @@ class Trainer():
                 with torch.no_grad():
                     x_rand = torch.randn(size=x.shape).to(self.device)
                     logits_rand = self.net(x_rand)
-                    entropy_rand = utils.entropy(logits_rand)
+                    entropy_rand = utils.entropy(utils.get_class_probs(logits_rand))
                 if torch.mean(entropy_rand).item() <= self.thresh_ent:
                     print('training on random inputs & random labels for minibatch {}'.format(i))
                     # x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
@@ -214,14 +214,14 @@ class Trainer():
                 self.metrics_epoch['{}_loss'.format(prefix)].update(losses.cpu().detach().numpy(), x.shape[0])
                 
                 if measure_entropy:
-                    entropy = utils.entropy(logits)
+                    entropy = utils.entropy(utils.get_class_probs(logits))
                     self.metrics_epoch['{}_entropy'.format(prefix)].update(entropy.cpu().detach().numpy(), x.shape[0])
                     
                     if is_val_set:
                         # x_rand = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
                         x_rand = torch.randn(size=x.shape).to(self.device)
                         logits_rand = self.net(x_rand)
-                        entropy_rand = utils.entropy(logits_rand)
+                        entropy_rand = utils.entropy(utils.get_class_probs(logits_rand))
                         self.metrics_epoch['entropy_rand'].update(entropy_rand.cpu().detach().numpy(), x.shape[0])
         self.summarize_metrics(matrix, prefix)
     
