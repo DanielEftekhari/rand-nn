@@ -1,10 +1,8 @@
 import sys
 import os
 from argparse import Namespace
-import datetime
 import collections
 import copy
-import math
 import random
 
 import numpy as np
@@ -22,7 +20,7 @@ import activations
 import layers
 import loss_fns
 from models import FCNet, ConvNet
-from plotting import plot_line, plot_hist
+import plotting
 from db import dbTiny
 import utils
 
@@ -42,11 +40,13 @@ class Trainer():
             self.data_path = r'./data/mnist'
             self.img_size = [1, 28, 28]
             self.normalize = [(0.1307,), (0.3081,)]
-        else:
+        elif self.cfg.dataset.lower() == 'cifar10':
             self.dataset = CIFAR10
             self.data_path = r'./data/cifar10'
             self.img_size = [3, 32, 32]
             self.normalize = [(0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)]
+        else:
+            raise NotImplementedError()
         
         # datasets and dataloaders        
         # base transforms
@@ -55,7 +55,7 @@ class Trainer():
             self.train_transforms.append(transforms.Normalize(self.normalize[0], self.normalize[1]))
         self.val_transforms = copy.deepcopy(self.train_transforms)
         
-        # (if applicable) additional training set transforms defined here
+        # # (if applicable) additional training set transforms defined here
         # train_transforms.extend([
         #                          ])
         
@@ -106,6 +106,9 @@ class Trainer():
         # # weight initialization - if not specified, weights are initialized using Kaiming uniform (He) initialization by default        
         # self.net.apply(layers.weights_init, self.cfg.weights_init.lower())
         
+        # loss function <kl_y_to_p> generalizes the cross entropy loss to continuous label distributions
+        # i.e. <kl_y_to_p> is equivalent to <cross_entropy_loss> for one-hot labels
+        # but is also a sensible loss function for continuous label distributions
         self.criterion = loss_fns.kl_y_to_p
         
         if self.cfg.optim.lower() == 'sgd':
@@ -128,9 +131,16 @@ class Trainer():
         # # fixed noise input
         # self.fixed_noise = torch.randn(size=(self.cfg.batch_size, *self.img_size)).to(self.device)
         
+        # flag controlling which minibatches will have activations hooked
+        self.flag_hook = False
+        self.features = {}
+        # register layers which will have activations hooked
+        self.init_hook()
+        
         # measure performance before any training is done
-        self.validate(self.dataloader_train, is_val_set=False, measure_entropy=True)
-        self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
+        with torch.no_grad():
+            self.validate(self.dataloader_train, is_val_set=False, measure_entropy=True)
+            self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
         
         # save initial weights
         self.save_model(epoch=0)
@@ -138,14 +148,18 @@ class Trainer():
         for epoch in range(1, self.cfg.epochs+1):
             self.metrics['epochs'].append(epoch)
             
+            self.clear_hook()
             self.train_one_epoch(self.dataloader_train)
-            self.validate(self.dataloader_train, is_val_set=False, measure_entropy=True)
-            self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
+            
+            self.init_hook()
+            with torch.no_grad():
+                self.validate(self.dataloader_train, is_val_set=False, measure_entropy=True)
+                self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
             
             if self.cfg.plot:
-                plot_line(self.metrics['epochs'], [self.metrics['train_loss_avg'], self.metrics['val_loss_avg']], [self.metrics['train_loss_std'], self.metrics['val_loss_std']], ['Training', 'Validation'], 'Epoch Number', 'Loss', self.cfg)
-                plot_line(self.metrics['epochs'], [self.metrics['train_acc'], self.metrics['val_acc']], None, ['Training', 'Validation'], 'Epoch Number', 'Accuracy', self.cfg)
-                plot_line(self.metrics['epochs'], [self.metrics['train_entropy_avg'], self.metrics['val_entropy_avg'], self.metrics['entropy_rand_avg']], [self.metrics['train_entropy_std'], self.metrics['val_entropy_std'], self.metrics['entropy_rand_std']], ['Training', 'Validation', 'Random'], 'Epoch Number', 'Entropy', self.cfg)
+                plotting.plot_line(self.metrics['epochs'], [self.metrics['train_loss_avg'], self.metrics['val_loss_avg']], [self.metrics['train_loss_std'], self.metrics['val_loss_std']], ['Training', 'Validation'], 'Epoch Number', 'Loss', self.cfg)
+                plotting.plot_line(self.metrics['epochs'], [self.metrics['train_acc'], self.metrics['val_acc']], None, ['Training', 'Validation'], 'Epoch Number', 'Accuracy', self.cfg)
+                plotting.plot_line(self.metrics['epochs'], [self.metrics['train_entropy_avg'], self.metrics['val_entropy_avg'], self.metrics['entropy_rand_avg']], [self.metrics['train_entropy_std'], self.metrics['val_entropy_std'], self.metrics['entropy_rand_std']], ['Training', 'Validation', 'Random'], 'Epoch Number', 'Entropy', self.cfg)
             
             if self.metrics['val_loss_avg'][-1] < self.best_loss:
                 self.best_loss = self.metrics['val_loss_avg'][-1]
@@ -163,29 +177,35 @@ class Trainer():
             with open(os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.nn_type, self.cfg.model_name)), 'w') as file:
                 file.write('{}.pth'.format(save_name))
     
+    def init_hook(self):
+        self.handle = {}
+        for name in self.net.names:
+            self.handle[name] = self.net.layers[name].register_forward_hook(self.get_activation(name))
+    
     def get_activation(self, name):
         def hook(model, input, output):
-            self.features[name] = output.detach()
+            if self.flag_hook:
+                self.features[name] = output.detach()
         return hook
     
-    def hook(self):
-        for name in self.net.names:
-            self.net.layers[name].register_forward_hook(self.get_activation(name))
+    def clear_hook(self):
+        for name in self.handle:
+            self.handle[name].remove()
     
     def train_one_epoch(self, dataloader):
         self.net.train()
         
-        self.features = {}
-        self.hook()
-        for i, (x, y) in enumerate(dataloader):
+        self.flag_hook = False
+        
+        for mb, (x, y) in enumerate(dataloader):
             x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
-            if self.cfg.train_random and (i+1) % 10 == 0:
+            if self.cfg.train_random and (mb+1) % 10 == 0:
                 with torch.no_grad():
                     x_rand = torch.randn(size=x.shape).to(self.device)
                     logits_rand = self.net(x_rand)
                     entropy_rand = utils.entropy(utils.get_class_probs(logits_rand))
                 if torch.mean(entropy_rand).item() <= self.thresh_ent:
-                    print('training on random inputs & random labels for minibatch {}'.format(i))
+                    print('training on random inputs & random labels for minibatch {}'.format(mb))
                     # x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
                     x = torch.randn(size=x.shape).to(self.device)
                     y_one_hot = torch.ones(size=(x.shape[0], self.c_dim)).to(self.device) / self.c_dim
@@ -199,30 +219,72 @@ class Trainer():
     def validate(self, dataloader, is_val_set=True, measure_entropy=True):
         self.net.eval()
         
+        self.flag_hook = True
+        self.features = {}
+        
         prefix = self.get_prefix(is_val_set)
         self.metrics_epoch = collections.defaultdict(utils.Meter)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
-        with torch.no_grad():
-            for i, (x, y) in enumerate(dataloader):
-                x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
-                y = y.to(self.device)
+        for mb, (x, y) in enumerate(dataloader):
+            x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
+            y = y.to(self.device)
+            
+            logits = self.net(x)
+            losses = self.criterion(logits, y_one_hot)
+            
+            matrix = matrix + utils.confusion_matrix(utils.tensor2array(utils.get_class_outputs(logits)), utils.tensor2array(y), self.c_dim)
+            self.metrics_epoch['{}_loss'.format(prefix)].update(utils.tensor2array(losses), x.shape[0])
+            
+            if self.cfg.plot and mb == 0:
+                num_log = min(self.cfg.num_log, x.shape[0])
+                name = '{}_{}_{}_epoch{:0=3d}_minibatch{}'
+                filepath = '{}/{}'.format(os.path.join(self.cfg.plot_dir, self.cfg.nn_type, self.cfg.model_name), name)
+                x_ = x[0:num_log]
+                x_np, y_np = utils.tensor2array(x[0:num_log]), utils.tensor2array(y[0:num_log])
+                losses_np = utils.tensor2array(losses[0:num_log])
                 
-                logits = self.net(x)
-                losses = self.criterion(logits, y_one_hot)
+                plotting.make_grid(x_, filepath.format(prefix, 'data', 'x', self.metrics['epochs'][-1], mb))
+                utils.save_array(x_np, filepath.format(prefix, 'data', 'x', self.metrics['epochs'][-1], mb))
+                utils.save_array(y_np, filepath.format(prefix, 'data', 'y', self.metrics['epochs'][-1], mb))
+                utils.save_array(losses_np, filepath.format(prefix, 'data', 'losses', self.metrics['epochs'][-1], mb))
                 
-                matrix = matrix + utils.confusion_matrix(utils.get_class_outputs(logits).cpu().detach().numpy(), y.cpu().detach().numpy(), self.c_dim)
-                self.metrics_epoch['{}_loss'.format(prefix)].update(losses.cpu().detach().numpy(), x.shape[0])
+                for (k, layer_name) in enumerate(self.features):
+                    features_np = utils.tensor2array(self.features[layer_name][0:num_log])
+                    utils.save_array(features_np, filepath.format(prefix, 'data', 'activations', self.metrics['epochs'][-1], mb)+'_{}'.format(layer_name))
+            
+            if measure_entropy:
+                entropy = utils.entropy(utils.get_class_probs(logits))
+                self.metrics_epoch['{}_entropy'.format(prefix)].update(utils.tensor2array(entropy), x.shape[0])
                 
-                if measure_entropy:
-                    entropy = utils.entropy(utils.get_class_probs(logits))
-                    self.metrics_epoch['{}_entropy'.format(prefix)].update(entropy.cpu().detach().numpy(), x.shape[0])
+                if self.cfg.plot and mb == 0:
+                    entropy_np = utils.tensor2array(entropy[0:num_log])
+                    utils.save_array(entropy_np, filepath.format(prefix, 'data', 'entropy', self.metrics['epochs'][-1], mb))
+                
+                if is_val_set:
+                    # x_rand = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
+                    x_rand = torch.randn(size=x.shape).to(self.device)
+                    logits_rand = self.net(x_rand)
+                    entropy_rand = utils.entropy(utils.get_class_probs(logits_rand))
+                    self.metrics_epoch['entropy_rand'].update(utils.tensor2array(entropy_rand), x.shape[0])
                     
-                    if is_val_set:
-                        # x_rand = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
-                        x_rand = torch.randn(size=x.shape).to(self.device)
-                        logits_rand = self.net(x_rand)
-                        entropy_rand = utils.entropy(utils.get_class_probs(logits_rand))
-                        self.metrics_epoch['entropy_rand'].update(entropy_rand.cpu().detach().numpy(), x.shape[0])
+                    if self.cfg.plot and mb == 0:
+                        name = '{}_{}_{}_epoch{:0=3d}_minibatch{}'
+                        filepath = '{}/{}'.format(os.path.join(self.cfg.plot_dir, self.cfg.nn_type, self.cfg.model_name), name)
+                        x_ = x_rand[0:num_log]
+                        x_np = utils.tensor2array(x_rand[0:num_log])
+                        entropy_np = utils.tensor2array(entropy_rand[0:num_log])
+                        
+                        plotting.make_grid(x_, filepath.format(prefix, 'noise', 'x', self.metrics['epochs'][-1], mb))
+                        utils.save_array(x_np, filepath.format(prefix, 'noise', 'x', self.metrics['epochs'][-1], mb))
+                        utils.save_array(entropy_np, filepath.format(prefix, 'noise', 'entropy', self.metrics['epochs'][-1], mb))
+                        
+                        for (k, layer_name) in enumerate(self.features):
+                            features_np = utils.tensor2array(self.features[layer_name][0:num_log])
+                            utils.save_array(features_np, filepath.format(prefix, 'noise', 'activations', self.metrics['epochs'][-1], mb)+'_{}'.format(layer_name))
+            
+            # disable hook after first minibatch by default - this is done for computational/speed purposes
+            self.flag_hook = False
+        
         self.summarize_metrics(matrix, prefix)
     
     @staticmethod
@@ -271,6 +333,7 @@ class Trainer():
         self.post['shuffle'] = self.cfg.shuffle
         
         self.post['num_workers'] = self.cfg.num_workers
+        self.post['num_log'] = self.cfg.num_log
         self.post['device'] = self.cfg.device.lower()
         self.post['random_seed'] = self.cfg.random_seed
         

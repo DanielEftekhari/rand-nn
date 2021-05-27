@@ -17,6 +17,7 @@
     "nn_type": "fc",
     "norm": "none",
     "normalize_input": true,
+    "num_log": 16,
     "num_workers": 4,
     "optim": "adam",
     "plot": true,

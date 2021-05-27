@@ -1,8 +1,14 @@
 import os
 
+import numpy as np
+
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
+from matplotlib.offsetbox import TextArea, DrawingArea, OffsetImage, AnnotationBbox
+import torchvision.utils as tvutils
+
+import utils
 
 FONTSIZE = 15
 ALPHA = 0.5
@@ -25,13 +31,25 @@ def plot_line(x, ys, contours, labels, x_label, y_label, cfg):
         else:
             plt.plot(x, ys[i], label=labels[i], alpha=ALPHA)
     format_plot(x_label, y_label, title='{} vs {}'.format(y_label, x_label))
-    plt.savefig('{}/{}_{}-vs-{}.png'.format(os.path.join(cfg.plot_dir, cfg.nn_type, cfg.model_name), cfg.model_name, y_label.lower(), x_label.lower()))
+    plt.savefig('{}/{}_{}-vs-{}'.format(os.path.join(cfg.plot_dir, cfg.nn_type, cfg.model_name), cfg.model_name, y_label.lower(), x_label.lower()))
     plt.close()
 
 
-def plot_hist(xs, color, epoch, batch, index, layer, x_label, y_label, cfg):
+def plot_hist(xs, colors, epoch, mb, index, layer, x_label, y_label, cfg, embeds=None):
     for i in range(len(xs)):
-        plt.hist(xs[i], label='layer: {}'.format(layer), color=color, alpha=ALPHA)
+        fig, ax = plt.subplots()
+        ax.hist(xs[i], label='layer: {}'.format(layer), color=colors[i], alpha=ALPHA)
+        if embeds is not None:
+            imagebox = OffsetImage(embeds[i], zoom=1.0, cmap='gray')
+            ab = AnnotationBbox(imagebox, (0.7, 0.7), xycoords='figure fraction')
+            ax.add_artist(ab)
     format_plot(x_label, y_label, title='Histogram of {}'.format(x_label))
-    plt.savefig('{}/{}_{}_epoch{}_batch{}_index{}_layer{}.png'.format(os.path.join(cfg.plot_dir, cfg.nn_type, cfg.model_name), cfg.model_name, x_label.replace(' ', '-').lower(), epoch, batch, index, layer))
+    plt.savefig('{}/{}_{}_epoch{}_mb{}_index{}_layer{}'.format(os.path.join(cfg.plot_dir, cfg.nn_type, cfg.model_name), cfg.model_name, x_label.replace(' ', '-').lower(), epoch, mb, index, layer))
+    plt.close()
+
+
+def make_grid(x, filepath):
+    np_img = utils.tensor2array(tvutils.make_grid(x))
+    plt.imshow(np.transpose(np_img, (1,2,0)), interpolation='nearest')
+    plt.savefig(filepath)
     plt.close()

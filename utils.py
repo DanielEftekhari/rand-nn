@@ -78,6 +78,14 @@ def save_json(data, filename):
         json.dump(obj=data, fp=outfile, sort_keys=True, indent=4, separators=(',', ': '))
 
 
+def save_array(data, filepath):
+    np.save(file=filepath, arr=data)
+
+
+def tensor2array(tensor):
+    return tensor.cpu().detach().numpy()
+
+
 def get_class_outputs(logits):
     return torch.argmax(logits, dim=-1)
 

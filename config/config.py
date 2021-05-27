@@ -90,6 +90,8 @@ misc_arg.add_argument('--save_model', type=checkbool,
                       help='whether to save the model, if validation loss improves, at the end of each epoch')
 misc_arg.add_argument('--plot', type=checkbool,
                       help='whether to plot performance metrics')
+misc_arg.add_argument('--num_log', type=int,
+                      help='number of samples to save additional logs for')
 misc_arg.add_argument('--plot_dir', type=str,
                       help='directory in which to save plots')
 
