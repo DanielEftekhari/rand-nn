@@ -180,8 +180,9 @@ class Trainer():
     
     def init_hook(self):
         self.handle = {}
-        for name in self.net.names:
-            self.handle[name] = self.net.layers[name].register_forward_hook(self.get_activation(name))
+        if self.cfg.num_log:
+            for name in self.net.names:
+                self.handle[name] = self.net.layers[name].register_forward_hook(self.get_activation(name))
     
     def get_activation(self, name):
         def hook(model, input, output):
@@ -236,7 +237,7 @@ class Trainer():
             matrix = matrix + metrics.confusion_matrix(utils.tensor2array(utils.get_class_outputs(logits)), utils.tensor2array(y), self.c_dim)
             self.metrics_epoch['{}_loss'.format(prefix)].update(utils.tensor2array(losses), x.shape[0])
             
-            if self.cfg.plot and mb == 0:
+            if self.cfg.num_log and self.cfg.plot and mb == 0:
                 num_log = min(self.cfg.num_log, x.shape[0])
                 name = '{}_{}_{}_epoch{:0=3d}_minibatch{}'
                 filepath = '{}/{}'.format(os.path.join(self.cfg.plot_dir, self.cfg.nn_type, self.cfg.model_name), name)
@@ -257,7 +258,7 @@ class Trainer():
                 entropy = metrics.entropy(utils.get_class_probs(logits))
                 self.metrics_epoch['{}_entropy'.format(prefix)].update(utils.tensor2array(entropy), x.shape[0])
                 
-                if self.cfg.plot and mb == 0:
+                if self.cfg.num_log and self.cfg.plot and mb == 0:
                     entropy_np = utils.tensor2array(entropy[0:num_log])
                     utils.save_array(entropy_np, filepath.format(prefix, 'data', 'entropy', self.metrics['epochs'][-1], mb))
                 
@@ -268,7 +269,7 @@ class Trainer():
                     entropy_rand = metrics.entropy(utils.get_class_probs(logits_rand))
                     self.metrics_epoch['entropy_rand'].update(utils.tensor2array(entropy_rand), x.shape[0])
                     
-                    if self.cfg.plot and mb == 0:
+                    if self.cfg.num_log and self.cfg.plot and mb == 0:
                         name = '{}_{}_{}_epoch{:0=3d}_minibatch{}'
                         filepath = '{}/{}'.format(os.path.join(self.cfg.plot_dir, self.cfg.nn_type, self.cfg.model_name), name)
                         x_ = x_rand[0:num_log]
