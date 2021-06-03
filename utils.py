@@ -65,16 +65,16 @@ def read_params(path, delimeter=' '):
     return res
 
 
-def load_json(filename):
-    if not os.path.isfile(filename):
+def load_json(filepath):
+    if not os.path.isfile(filepath):
         return None
-    with open(filename) as data_file:
+    with open(filepath) as data_file:
         data = json.load(data_file)
     return data
 
 
-def save_json(data, filename):
-    with open(filename, 'w') as outfile:
+def save_json(data, filepath):
+    with open(filepath, 'w') as outfile:
         json.dump(obj=data, fp=outfile, sort_keys=True, indent=4, separators=(',', ': '))
 
 
@@ -101,22 +101,8 @@ def to_one_hot(y, c_dim):
     return y_one_hot
 
 
-def entropy(probs):
-    return -torch.sum(torch.where(probs > 0, probs * torch.log(probs), torch.Tensor([0.]).to(probs.device)), dim=-1)
-
-
-def max_ent(c_dim):
-    return math.log(c_dim)
-
-
-def calculate_acc(matrix):
-    return np.trace(matrix) / np.sum(matrix)
-
-
-def confusion_matrix(y_hat, y, c_dim):
-    matrix = np.zeros((c_dim, c_dim), dtype=np.uint32)
-    np.add.at(matrix, [y, y_hat], 1)
-    return matrix
+def where(condition, x, y=0.):
+    return torch.where(condition, x, torch.Tensor([y]).to(x.device))
 
 
 def append(*args):

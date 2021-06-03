@@ -2,24 +2,14 @@ import torch
 import torch.nn as nn
 
 
-def weights_init(m, cfg):
-    if cfg.weights_init.lower():
-        init = getattr(nn.init, '{}_'.format(cfg.weights_init.lower()))
-        init(m.weight, gain=nn.init.calculate_gain(cfg.activation.lower()))
-    # if s == 'xavier_uniform':
-    #     nn.init.xavier_uniform_(m.weight)
-    # elif s == 'xavier_normal':
-    #     nn.init.xavier_normal_(m.weight)
-    # elif s == 'kaiming_uniform':
-    #     nn.init.kaiming_uniform_(m.weight)
-    # elif s == 'kaiming_normal':
-    #     nn.init.kaiming_normal_(m.weight)
-    nn.init.zeros_(m.bias)
-
-
-def add_gaussian_noise_(x, mu, std):
+def additive_gaussian_noise_(x, mu=0., std=1.):
     with torch.no_grad():
         x.add_(torch.randn_like(x) * std + mu)
+
+
+def multiplicative_gaussian_noise_(x, mu=1., std=1.):
+    with torch.no_grad():
+        x.mul_(torch.randn_like(x) * std + mu)
 
 
 class LayerNorm1d(nn.Module):

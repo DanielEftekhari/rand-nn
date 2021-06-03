@@ -22,6 +22,7 @@ import loss_fns
 from models import FCNet, ConvNet
 import plotting
 from db import dbTiny
+import metrics
 import utils
 
 
@@ -48,7 +49,7 @@ class Trainer():
         else:
             raise NotImplementedError()
         
-        # datasets and dataloaders        
+        # datasets and dataloaders
         # base transforms
         self.train_transforms = [transforms.ToTensor()]
         if self.cfg.normalize_input:
@@ -76,7 +77,7 @@ class Trainer():
         self.c_dim = np.unique(targets).shape[0]
 
         # maximum entropy threshold for training with random inputs
-        self.max_ent = utils.max_ent(self.c_dim)
+        self.max_ent = metrics.max_ent(self.c_dim)
         self.thresh_ent = self.cfg.train_random * self.max_ent
         
         # define model
@@ -103,8 +104,8 @@ class Trainer():
         self.net = net(self.img_size, self.c_dim, self.params, self.activation, self.norm).to(self.device)
         self.post['params'] = self.params
         
-        # # weight initialization - if not specified, weights are initialized using Kaiming uniform (He) initialization by default        
-        # self.net.apply(layers.weights_init, self.cfg.weights_init.lower())
+        # # weight initialization - weights are initialized using Kaiming uniform (He) initialization by default
+        # TODO: add custom weight initialization scheme
         
         # loss function <kl_y_to_p> generalizes the cross entropy loss to continuous label distributions
         # i.e. <kl_y_to_p> is equivalent to <cross_entropy_loss> for one-hot labels
@@ -203,7 +204,7 @@ class Trainer():
                 with torch.no_grad():
                     x_rand = torch.randn(size=x.shape).to(self.device)
                     logits_rand = self.net(x_rand)
-                    entropy_rand = utils.entropy(utils.get_class_probs(logits_rand))
+                    entropy_rand = metrics.entropy(utils.get_class_probs(logits_rand))
                 if torch.mean(entropy_rand).item() <= self.thresh_ent:
                     print('training on random inputs & random labels for minibatch {}'.format(mb))
                     # x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
@@ -232,7 +233,7 @@ class Trainer():
             logits = self.net(x)
             losses = self.criterion(logits, y_one_hot)
             
-            matrix = matrix + utils.confusion_matrix(utils.tensor2array(utils.get_class_outputs(logits)), utils.tensor2array(y), self.c_dim)
+            matrix = matrix + metrics.confusion_matrix(utils.tensor2array(utils.get_class_outputs(logits)), utils.tensor2array(y), self.c_dim)
             self.metrics_epoch['{}_loss'.format(prefix)].update(utils.tensor2array(losses), x.shape[0])
             
             if self.cfg.plot and mb == 0:
@@ -253,7 +254,7 @@ class Trainer():
                     utils.save_array(features_np, filepath.format(prefix, 'data', 'activations', self.metrics['epochs'][-1], mb)+'_{}'.format(layer_name))
             
             if measure_entropy:
-                entropy = utils.entropy(utils.get_class_probs(logits))
+                entropy = metrics.entropy(utils.get_class_probs(logits))
                 self.metrics_epoch['{}_entropy'.format(prefix)].update(utils.tensor2array(entropy), x.shape[0])
                 
                 if self.cfg.plot and mb == 0:
@@ -264,7 +265,7 @@ class Trainer():
                     # x_rand = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
                     x_rand = torch.randn(size=x.shape).to(self.device)
                     logits_rand = self.net(x_rand)
-                    entropy_rand = utils.entropy(utils.get_class_probs(logits_rand))
+                    entropy_rand = metrics.entropy(utils.get_class_probs(logits_rand))
                     self.metrics_epoch['entropy_rand'].update(utils.tensor2array(entropy_rand), x.shape[0])
                     
                     if self.cfg.plot and mb == 0:
@@ -302,7 +303,7 @@ class Trainer():
             print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_{}'.format(key, 'avg'), self.metrics['{}_{}'.format(key, 'avg')][-1]))
             print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_{}'.format(key, 'std'), self.metrics['{}_{}'.format(key, 'std')][-1]))
         print(matrix)
-        self.metrics['{}_acc'.format(prefix)].append(utils.calculate_acc(matrix))
+        self.metrics['{}_acc'.format(prefix)].append(metrics.calculate_acc(matrix))
         print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_acc'.format(prefix), self.metrics['{}_acc'.format(prefix)][-1]))
         utils.flush()
     
