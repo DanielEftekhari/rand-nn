@@ -31,7 +31,7 @@ def plot_line(x, ys, contours, labels, x_label, y_label, cfg):
         else:
             plt.plot(x, ys[i], label=labels[i], alpha=ALPHA)
     format_plot(x_label, y_label, title='{} vs {}'.format(y_label, x_label))
-    plt.savefig('{}/{}_{}-vs-{}'.format(os.path.join(cfg.plot_dir, cfg.nn_type, cfg.model_name), cfg.model_name, y_label.lower(), x_label.lower()))
+    plt.savefig('{}/{}_{}-vs-{}'.format(os.path.join(cfg.plot_dir, cfg.model_type, cfg.model_name), cfg.model_name, y_label.lower(), x_label.lower()))
     plt.close()
 
 
@@ -44,7 +44,7 @@ def plot_hist(xs, colors, epoch, mb, index, layer, x_label, y_label, cfg, embeds
             ab = AnnotationBbox(imagebox, (0.7, 0.7), xycoords='figure fraction')
             ax.add_artist(ab)
     format_plot(x_label, y_label, title='Histogram of {}'.format(x_label))
-    plt.savefig('{}/{}_{}_epoch{}_mb{}_index{}_layer{}'.format(os.path.join(cfg.plot_dir, cfg.nn_type, cfg.model_name), cfg.model_name, x_label.replace(' ', '-').lower(), epoch, mb, index, layer))
+    plt.savefig('{}/{}_{}_epoch{}_mb{}_index{}_layer{}'.format(os.path.join(cfg.plot_dir, cfg.model_type, cfg.model_name), cfg.model_name, x_label.replace(' ', '-').lower(), epoch, mb, index, layer))
     plt.close()
 
 

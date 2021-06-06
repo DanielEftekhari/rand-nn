@@ -19,7 +19,7 @@ config_arg.add_argument('--config', type=str, default='./config/default_config.j
 
 # neural network params
 nn_arg = add_argument_group('Neural Network Params')
-nn_arg.add_argument('--nn_type', type=str,
+nn_arg.add_argument('--model_type', type=str,
                     help='whether to use a fully connected <fc> network or a convolutional <conv> network')
 nn_arg.add_argument('--fc_params', type=str,
                     help='path to txt file containing number of units per fully connected layer')
@@ -76,6 +76,8 @@ db_arg.add_argument('--db_path', type=str,
 misc_arg = add_argument_group('Misc.')
 misc_arg.add_argument('--model_name', type=str,
                       help="model name")
+misc_arg.add_argument('--data_dir', type=str,
+                      help="directory to load/save dataset from/to")
 misc_arg.add_argument('--stdout_dir', type=str,
                       help="directory to log program stdout to")
 misc_arg.add_argument('--model_dir', type=str,

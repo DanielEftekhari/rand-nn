@@ -3,8 +3,8 @@ import os
 from argparse import Namespace
 import collections
 import copy
-import random
 
+import random
 import numpy as np
 import torch
 import torch.nn as nn
@@ -38,12 +38,12 @@ class Trainer():
         # dataset parameters
         if self.cfg.dataset.lower() == 'mnist':
             self.dataset = MNIST
-            self.data_path = r'./data/mnist'
+            self.data_path = self.cfg.data_dir + 'mnist'
             self.img_size = [1, 28, 28]
             self.normalize = [(0.1307,), (0.3081,)]
         elif self.cfg.dataset.lower() == 'cifar10':
             self.dataset = CIFAR10
-            self.data_path = r'./data/cifar10'
+            self.data_path = self.cfg.data_dir + 'cifar10'
             self.img_size = [3, 32, 32]
             self.normalize = [(0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)]
         else:
@@ -82,9 +82,9 @@ class Trainer():
         
         # define model
         # parameters for each hidden layer is passed in as an argument
+        self.params = utils.read_params(self.cfg.model_params[self.cfg.model_type])
         self.activation = getattr(activations, self.cfg.activation.lower())
-        if self.cfg.nn_type.lower()  == 'fc':
-            self.params = utils.read_params(self.cfg.fc_params)
+        if self.cfg.model_type.lower()  == 'fc':
             if self.cfg.norm.lower() == 'batch':
                 self.norm = nn.BatchNorm1d
             elif self.cfg.norm.lower() == 'layer':
@@ -92,8 +92,7 @@ class Trainer():
             else:
                 self.norm = None
             net = FCNet
-        else:
-            self.params = utils.read_params(self.cfg.conv_params)
+        elif self.cfg.model_type.lower()  == 'conv':
             if self.cfg.norm.lower() == 'batch':
                self.norm = nn.BatchNorm2d
             elif self.cfg.norm.lower() == 'layer':
@@ -101,6 +100,8 @@ class Trainer():
             else:
                 self.norm = None
             net = ConvNet
+        else:
+            raise NotImplementedError()
         self.net = net(self.img_size, self.c_dim, self.params, self.activation, self.norm).to(self.device)
         self.post['params'] = self.params
         
@@ -113,13 +114,11 @@ class Trainer():
         self.criterion = loss_fns.kl_y_to_p
         
         if self.cfg.optim.lower() == 'sgd':
-            self.optimizer = optim.SGD(params=self.net.parameters(), lr=self.cfg.lr, momentum=self.cfg.momentum, nesterov=self.cfg.nesterov)
-            self.post['momentum'] = self.cfg.momentum
-            self.post['nesterov'] = self.cfg.nesterov
+            self.optimizer = optim.SGD(params=self.net.parameters(), lr=self.cfg.lr, momentum=self.cfg.optim_params['sgd']['momentum'], nesterov=self.cfg.optim_params['sgd']['nesterov'])
+            self.post['momentum'], self.post['nesterov'] = self.cfg.optim_params['sgd']['momentum'], self.cfg.optim_params['sgd']['nesterov']
         else:
-            self.optimizer = optim.Adam(params=self.net.parameters(), lr=self.cfg.lr, betas=(self.cfg.beta1, self.cfg.beta2))
-            self.post['beta1'] = self.cfg.beta1
-            self.post['beta2'] = self.cfg.beta2
+            self.optimizer = optim.Adam(params=self.net.parameters(), lr=self.cfg.lr, betas=(self.cfg.optim_params['adam']['beta1'], self.cfg.optim_params['adam']['beta2']))
+            self.post['beta1'], self.post['beta2'] = self.cfg.optim_params['adam']['beta1'], self.cfg.optim_params['adam']['beta2']
     
     def train(self):
         # tracking training and validation stats over epochs
@@ -173,9 +172,9 @@ class Trainer():
     
     def save_model(self, epoch):
         if self.cfg.save_model:
-            save_name = '{}-net_{}_epoch{:0=3d}_val_loss{:.4f}'.format(self.cfg.nn_type, self.cfg.model_name, epoch, self.metrics['val_loss_avg'][-1])
-            torch.save(self.net.state_dict(), os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}.pth'.format(save_name)))
-            with open(os.path.join(self.cfg.model_dir, self.cfg.nn_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.nn_type, self.cfg.model_name)), 'w') as file:
+            save_name = '{}-net_{}_epoch{:0=3d}_val_loss{:.4f}'.format(self.cfg.model_type, self.cfg.model_name, epoch, self.metrics['val_loss_avg'][-1])
+            torch.save(self.net.state_dict(), os.path.join(self.cfg.model_dir, self.cfg.model_type, self.cfg.model_name, '{}.pth'.format(save_name)))
+            with open(os.path.join(self.cfg.model_dir, self.cfg.model_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.model_type, self.cfg.model_name)), 'w') as file:
                 file.write('{}.pth'.format(save_name))
     
     def init_hook(self):
@@ -240,7 +239,7 @@ class Trainer():
             if self.cfg.num_log and self.cfg.plot and mb == 0:
                 num_log = min(self.cfg.num_log, x.shape[0])
                 name = '{}_{}_{}_epoch{:0=3d}_minibatch{}'
-                filepath = '{}/{}'.format(os.path.join(self.cfg.plot_dir, self.cfg.nn_type, self.cfg.model_name), name)
+                filepath = '{}/{}'.format(os.path.join(self.cfg.plot_dir, self.cfg.model_type, self.cfg.model_name), name)
                 x_ = x[0:num_log]
                 x_np, y_np = utils.tensor2array(x[0:num_log]), utils.tensor2array(y[0:num_log])
                 losses_np = utils.tensor2array(losses[0:num_log])
@@ -271,7 +270,7 @@ class Trainer():
                     
                     if self.cfg.num_log and self.cfg.plot and mb == 0:
                         name = '{}_{}_{}_epoch{:0=3d}_minibatch{}'
-                        filepath = '{}/{}'.format(os.path.join(self.cfg.plot_dir, self.cfg.nn_type, self.cfg.model_name), name)
+                        filepath = '{}/{}'.format(os.path.join(self.cfg.plot_dir, self.cfg.model_type, self.cfg.model_name), name)
                         x_ = x_rand[0:num_log]
                         x_np = utils.tensor2array(x_rand[0:num_log])
                         entropy_np = utils.tensor2array(entropy_rand[0:num_log])
@@ -308,7 +307,6 @@ class Trainer():
         print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_acc'.format(prefix), self.metrics['{}_acc'.format(prefix)][-1]))
         utils.flush()
     
-    # TODO: modularize
     def init_post(self):
         last_run = dbTiny.get_last(self.db, 'run')
         if last_run:
@@ -317,31 +315,15 @@ class Trainer():
             run = 1
         self.post = {'run': run}
         
-        self.post['model_name'] = self.cfg.model_name.lower()
-        
-        self.post['nn_type'] = self.cfg.nn_type.lower()
-        
-        self.post['activation'] = self.cfg.activation.lower()
-        self.post['norm'] = self.cfg.norm.lower()
-        self.post['weights_init'] = self.cfg.weights_init.lower()
-        
-        self.post['dataset'] = self.cfg.dataset.lower()
-        self.post['normalize_input'] = self.cfg.normalize_input
-        
-        self.post['epochs'] = self.cfg.epochs
-        self.post['batch_size'] = self.cfg.batch_size
-        self.post['optim'] = self.cfg.optim.lower()
-        self.post['lr'] = self.cfg.lr
-        self.post['shuffle'] = self.cfg.shuffle
-        
-        self.post['num_workers'] = self.cfg.num_workers
-        self.post['num_log'] = self.cfg.num_log
-        self.post['device'] = self.cfg.device.lower()
-        self.post['random_seed'] = self.cfg.random_seed
+        cfg_json = vars(self.cfg)
+        for key in cfg_json:
+            if type(cfg_json[key]) == str:
+                self.post[key] = cfg_json[key].lower()
+            elif type(cfg_json[key]) != dict:
+                self.post[key] = cfg_json[key]
         
         self.post['timestamp'] = self.cfg.time
     
-    # TODO: modularize
     def update_post(self):
         self.post['train_loss_avg'] = self.metrics['train_loss_avg']
         self.post['train_loss_std'] = self.metrics['train_loss_std']
@@ -409,15 +391,15 @@ def main(cfg):
     cfg.model_name = '{}_{}'.format(cfg.model_name, current_time)
     
     # setting up output directories, and writing to stdout
-    utils.make_dirs(os.path.join(cfg.stdout_dir, cfg.nn_type), replace=False)
-    sys.stdout = open(r'./{}/{}/stdout_{}_{}.txt'.format(cfg.stdout_dir, cfg.nn_type, cfg.nn_type, cfg.model_name), 'w')
+    utils.make_dirs(os.path.join(cfg.stdout_dir, cfg.model_type), replace=False)
+    sys.stdout = open(r'./{}/{}/stdout_{}_{}.txt'.format(cfg.stdout_dir, cfg.model_type, cfg.model_type, cfg.model_name), 'w')
     print(cfg)
     utils.flush()
     
     if cfg.plot:
-        utils.make_dirs(os.path.join(cfg.plot_dir, cfg.nn_type, cfg.model_name), replace=True)
+        utils.make_dirs(os.path.join(cfg.plot_dir, cfg.model_type, cfg.model_name), replace=True)
     if cfg.save_model:
-        utils.make_dirs(os.path.join(cfg.model_dir, cfg.nn_type, cfg.model_name), replace=True)
+        utils.make_dirs(os.path.join(cfg.model_dir, cfg.model_type, cfg.model_name), replace=True)
     
     # set random seed
     if cfg.random_seed == 0:

@@ -1,25 +1,34 @@
 {
     "activation": "relu",
     "batch_size": 128,
-    "beta1": 0.9,
-    "beta2": 0.999,
-    "conv_params": "./params/conv_params.txt",
+    "data_dir": "./data/",
     "dataset": "MNIST",
     "db_path": "./db/db.json",
     "device": "cuda",
     "epochs": 15,
-    "fc_params": "./params/fc_params.txt",
     "lr": 0.0001,
     "model_dir": "./ckpt",
     "model_name": "net",
-    "momentum": 0.9,
-    "nesterov": true,
-    "nn_type": "fc",
+    "model_params": {
+        "conv": "./params/conv_params.txt",
+        "fc": "./params/fc_params.txt"
+    },
+    "model_type": "fc",
     "norm": "none",
     "normalize_input": true,
     "num_log": 0,
     "num_workers": 4,
     "optim": "adam",
+    "optim_params": {
+        "adam": {
+            "beta1": 0.9,
+            "beta2": 0.999
+        },
+        "sgd": {
+            "momentum": 0.9,
+            "nesterov": true
+        }
+    },
     "plot": true,
     "plot_dir": "./plots",
     "random_seed": 2,
