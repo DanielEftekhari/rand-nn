@@ -11,3 +11,7 @@ def tanh(x):
 
 def relu(x):
     return torch.relu(x)
+
+
+def linear(x):
+    return x

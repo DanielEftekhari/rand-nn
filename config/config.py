@@ -27,7 +27,7 @@ nn_arg.add_argument('--conv_params', type=str,
                     help='path to txt file containing convolutional network parameters'
                          'order of arguments is (in_channels, out_channels, kernel_size, stride, padding)')
 nn_arg.add_argument('--activation', type=str,
-                    help='activation function, one of <sigmoid>, <tanh>, <relu>')
+                    help='activation function, one of <sigmoid>, <tanh>, <relu>, <linear>')
 nn_arg.add_argument('--norm', type=str,
                     help='whether to use batch norm <batch>, layer norm <layer>, or no norm <none>')
 nn_arg.add_argument('--weights_init', type=str,
