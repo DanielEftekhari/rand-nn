@@ -1,17 +1,17 @@
-import torch
+import torch.nn as nn
 
 
-def sigmoid(x):
-    return torch.sigmoid(x)
+def sigmoid():
+    return nn.Sigmoid()
 
 
-def tanh(x):
-    return torch.tanh(x)
+def tanh():
+    return nn.Tanh()
 
 
-def relu(x):
-    return torch.relu(x)
+def relu():
+    return nn.ReLU()
 
 
-def linear(x):
-    return x
+def linear():
+    return nn.Identity()
