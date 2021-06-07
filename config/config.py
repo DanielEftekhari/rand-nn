@@ -31,7 +31,7 @@ nn_arg.add_argument('--activation', type=str,
 nn_arg.add_argument('--norm', type=str,
                     help='whether to use batch norm <batch>, layer norm <layer>, or no norm <none>')
 nn_arg.add_argument('--weights_init', type=str,
-                    help='weight initialization scheme, one of: pytorch <default>, <xavier_uniform>, <xavier_normal>, <kaiming_uniform>, <kaiming_normal>')
+                    help='weight initialization scheme, one of: pytorch <default>')
 
 # dataset params
 dataset_arg = add_argument_group('Data Params')

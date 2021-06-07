@@ -105,8 +105,8 @@ class Trainer():
         self.net = net(self.img_size, self.c_dim, self.params, self.activation, self.norm).to(self.device)
         self.post['params'] = self.params
         
-        # # weight initialization - weights are initialized using Kaiming uniform (He) initialization by default
         # TODO: add custom weight initialization scheme
+        # # weight initialization - weights are initialized using Kaiming uniform (He) initialization by default
         
         # loss function <kl_y_to_p> generalizes the cross entropy loss to continuous label distributions
         # i.e. <kl_y_to_p> is equivalent to <cross_entropy_loss> for one-hot labels
