@@ -17,21 +17,21 @@ config_arg = add_argument_group('Config Params')
 config_arg.add_argument('--config', type=str, default='./config/default_config.json',
                         help='json configuration file, to initialize configs with')
 
-# neural network params
-nn_arg = add_argument_group('Neural Network Params')
-nn_arg.add_argument('--model_type', type=str,
-                    help='whether to use a fully connected <fc> network or a convolutional <conv> network')
-nn_arg.add_argument('--fc_params', type=str,
-                    help='path to txt file containing number of units per fully connected layer')
-nn_arg.add_argument('--conv_params', type=str,
-                    help='path to txt file containing convolutional network parameters'
+# model params
+model_arg = add_argument_group('Model Params')
+model_arg.add_argument('--model_type', type=str,
+                       help='whether to use a fully connected <fc> network or a convolutional <conv> network')
+model_arg.add_argument('--fc_params', type=str,
+                       help='path to txt file containing number of units per fully connected layer')
+model_arg.add_argument('--conv_params', type=str,
+                       help='path to txt file containing convolutional network parameters'
                          'order of arguments is (in_channels, out_channels, kernel_size, stride, padding)')
-nn_arg.add_argument('--activation', type=str,
-                    help='activation function, one of <sigmoid>, <tanh>, <relu>, <linear>')
-nn_arg.add_argument('--norm', type=str,
-                    help='whether to use batch norm <batch>, layer norm <layer>, or no norm <none>')
-nn_arg.add_argument('--weights_init', type=str,
-                    help='weight initialization scheme, one of: pytorch <default>')
+model_arg.add_argument('--activation', type=str,
+                       help='activation function, one of <sigmoid>, <tanh>, <relu>, <linear>')
+model_arg.add_argument('--norm', type=str,
+                       help='whether to use batch norm <batch>, layer norm <layer>, or no norm <none>')
+model_arg.add_argument('--weights_init', type=str,
+                       help='weight initialization scheme, one of: pytorch <default>')
 
 # dataset params
 dataset_arg = add_argument_group('Data Params')
@@ -67,11 +67,6 @@ train_arg.add_argument('--beta2', type=float,
 train_arg.add_argument('--shuffle', type=checkbool,
                        help='whether to shuffle training data')
 
-# database params
-db_arg = add_argument_group('Database Params')
-db_arg.add_argument('--db_path', type=str,
-                    help="path to database file")
-
 # other params
 misc_arg = add_argument_group('Misc.')
 misc_arg.add_argument('--model_name', type=str,
@@ -80,6 +75,8 @@ misc_arg.add_argument('--data_dir', type=str,
                       help="directory to load/save dataset from/to")
 misc_arg.add_argument('--stdout_dir', type=str,
                       help="directory to log program stdout to")
+misc_arg.add_argument('--db_path', type=str,
+                      help="path to database file")
 misc_arg.add_argument('--model_dir', type=str,
                       help='directory in which to save model checkpoints')
 misc_arg.add_argument('--num_workers', type=int,

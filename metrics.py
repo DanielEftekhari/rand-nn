@@ -9,11 +9,11 @@ def entropy(probs):
     return -torch.sum(utils.where(probs > 0, probs * torch.log(probs)), dim=-1)
 
 
-def max_ent(c_dim):
+def max_entropy(c_dim):
     return math.log(c_dim)
 
 
-def calculate_acc(matrix):
+def accuracy(matrix):
     return np.trace(matrix) / np.sum(matrix)
 
 

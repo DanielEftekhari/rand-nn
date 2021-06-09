@@ -77,8 +77,8 @@ class Trainer():
         self.c_dim = np.unique(targets).shape[0]
 
         # maximum entropy threshold for training with random inputs
-        self.max_ent = metrics.max_ent(self.c_dim)
-        self.thresh_ent = self.cfg.train_random * self.max_ent
+        self.max_entropy = metrics.max_entropy(self.c_dim)
+        self.thresh_entropy = self.cfg.train_random * self.max_entropy
         
         # define model
         # parameters for each hidden layer is passed in as an argument
@@ -125,7 +125,7 @@ class Trainer():
         self.metrics = collections.defaultdict(list)
         self.metrics['epochs'].append(0)
         
-        # best model is defined as model with best performing validation loss
+        # best model is defined as model with best performing (lowest) validation loss
         self.best_loss = float('inf')
         
         # # fixed noise input
@@ -205,7 +205,7 @@ class Trainer():
                     x_rand = torch.randn(size=x.shape).to(self.device)
                     logits_rand = self.net(x_rand)
                     entropy_rand = metrics.entropy(utils.get_class_probs(logits_rand))
-                if torch.mean(entropy_rand).item() <= self.thresh_ent:
+                if torch.mean(entropy_rand).item() <= self.thresh_entropy:
                     print('training on random inputs & random labels for minibatch {}'.format(mb))
                     # x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
                     x = torch.randn(size=x.shape).to(self.device)
@@ -290,11 +290,8 @@ class Trainer():
     
     @staticmethod
     def get_prefix(is_val_set):
-        if is_val_set:
-            prefix = 'val'
-        else:
-            prefix = 'train'
-        return prefix
+        if is_val_set: return 'val'
+        else: return 'train'
     
     def summarize_metrics(self, matrix, prefix):
         for key in sorted(self.metrics_epoch.keys()):
@@ -303,7 +300,7 @@ class Trainer():
             print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_{}'.format(key, 'avg'), self.metrics['{}_{}'.format(key, 'avg')][-1]))
             print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_{}'.format(key, 'std'), self.metrics['{}_{}'.format(key, 'std')][-1]))
         print(matrix)
-        self.metrics['{}_acc'.format(prefix)].append(metrics.calculate_acc(matrix))
+        self.metrics['{}_acc'.format(prefix)].append(metrics.accuracy(matrix))
         print('epoch{:0=3d}_{}{:.4f}'.format(self.metrics['epochs'][-1], '{}_acc'.format(prefix), self.metrics['{}_acc'.format(prefix)][-1]))
         utils.flush()
     
@@ -314,15 +311,14 @@ class Trainer():
         else:
             run = 1
         self.post = {'run': run}
-        
-        cfg_json = vars(self.cfg)
-        for key in cfg_json:
-            if type(cfg_json[key]) == str:
-                self.post[key] = cfg_json[key].lower()
-            elif type(cfg_json[key]) != dict:
-                self.post[key] = cfg_json[key]
-        
         self.post['timestamp'] = self.cfg.time
+        
+        cfg_dict = vars(self.cfg)
+        for key in cfg_dict:
+            if type(cfg_dict[key]) == str:
+                self.post[key] = cfg_dict[key].lower()
+            elif type(cfg_dict[key]) != dict:
+                self.post[key] = cfg_dict[key]
     
     def update_post(self):
         self.post['train_loss_avg'] = self.metrics['train_loss_avg']
@@ -377,15 +373,15 @@ def main(cfg):
     
     # override default-config parameters, with command-line-provided parameters
     preset_cfg = utils.load_json(cfg.config)
-    cfg_json = vars(cfg)
-    for key in cfg_json:
-        if cfg_json[key] is not None:
-            preset_cfg[key] = cfg_json[key]
+    cfg_dict = vars(cfg)
+    for key in cfg_dict:
+        if cfg_dict[key] is not None:
+            preset_cfg[key] = cfg_dict[key]
     cfg = Namespace(**preset_cfg)
     
-    cfg_json = vars(cfg)
+    cfg_dict = vars(cfg)
     utils.make_dirs('./config/save/', replace=False)
-    utils.save_json(cfg_json, './config/save/config_{}.json'.format(current_time))
+    utils.save_json(cfg_dict, './config/save/config_{}.json'.format(current_time))
     
     cfg.time = current_time
     cfg.model_name = '{}_{}'.format(cfg.model_name, current_time)
