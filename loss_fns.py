@@ -14,12 +14,12 @@ def cross_entropy_loss(logits, y):
     return -torch.sum(y * (logits - z[:, None]), dim=-1)
 
 
-def kl_p_to_u(logits):
+def kl_p_to_u(logits, y=None):
     max_entropy = metrics.max_entropy(logits.shape[1])
     return max_entropy - metrics.entropy(utils.get_class_probs(logits))
 
 
-def kl_u_to_p(logits):
+def kl_u_to_p(logits, y=None):
     max_entropy = metrics.max_entropy(logits.shape[1])
     return -max_entropy - 1. / logits.shape[1] * torch.sum(torch.log(utils.get_class_probs(logits)), dim=-1)
 
