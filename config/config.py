@@ -37,17 +37,14 @@ model_arg.add_argument('--weights_init', type=str,
 dataset_arg = add_argument_group('Data Params')
 dataset_arg.add_argument('--dataset', type=str,
                          help='eiter <MNIST> or <CIFAR10>')
-
-# transforms
-transforms_arg = add_argument_group('Transforms Params')
-transforms_arg.add_argument('--normalize_input', type=checkbool,
-                            help='whether to normalize inputs (using mean & standard deviation of training set)')
+dataset_arg.add_argument('--normalize_input', type=checkbool,
+                         help='whether to normalize inputs (using mean & standard deviation of training set)')
 
 # training params
 train_arg = add_argument_group('Training Params')
 train_arg.add_argument('--train_random', type=float,
                        help='whether to train on random inputs & random labels,'
-                            'when the entropy for random inputs decreases beneath a threshold')
+                            'when the entropy for random inputs decreases below a threshold')
 train_arg.add_argument('--epochs', type=int,
                        help='number of epochs to train for')
 train_arg.add_argument('--batch_size', type=int,

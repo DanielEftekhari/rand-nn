@@ -205,7 +205,7 @@ class Trainer():
                 with torch.no_grad():
                     x_rand = torch.randn(size=x.shape).to(self.device)
                     logits_rand = self.net(x_rand)
-                    entropy_rand = metrics.entropy(utils.get_class_probs(logits_rand))
+                    entropy_rand = metrics.entropy(utils.logits_to_probs(logits_rand))
                 if torch.mean(entropy_rand).item() <= self.thresh_entropy:
                     print('training on random inputs & random labels for minibatch {}'.format(mb))
                     # x = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
@@ -255,7 +255,7 @@ class Trainer():
                     utils.save_array(features_np, filepath.format(prefix, 'data', 'activations', self.metrics['epochs'][-1], mb)+'_{}'.format(layer_name))
             
             if measure_entropy:
-                entropy = metrics.entropy(utils.get_class_probs(logits))
+                entropy = metrics.entropy(utils.logits_to_probs(logits))
                 self.metrics_epoch['{}_entropy'.format(prefix)].update(utils.tensor2array(entropy), x.shape[0])
                 
                 if self.cfg.num_log and self.cfg.plot and mb == 0:
@@ -266,7 +266,7 @@ class Trainer():
                     # x_rand = (torch.rand(size=x.shape).to(self.device) - 0.5) / 0.5
                     x_rand = torch.randn(size=x.shape).to(self.device)
                     logits_rand = self.net(x_rand)
-                    entropy_rand = metrics.entropy(utils.get_class_probs(logits_rand))
+                    entropy_rand = metrics.entropy(utils.logits_to_probs(logits_rand))
                     self.metrics_epoch['entropy_rand'].update(utils.tensor2array(entropy_rand), x.shape[0])
                     
                     if self.cfg.num_log and self.cfg.plot and mb == 0:

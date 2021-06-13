@@ -85,11 +85,11 @@ def tensor2array(tensor):
     return tensor.cpu().detach().numpy()
 
 
-def get_class_outputs(logits):
-    return torch.argmax(logits, dim=-1)
+def get_class_outputs(outputs):
+    return torch.argmax(outputs, dim=-1)
 
 
-def get_class_probs(logits):
+def logits_to_probs(logits):
     c = torch.max(logits, dim=-1)[0]
     return torch.softmax(logits - c[:, None], dim=-1)
 
