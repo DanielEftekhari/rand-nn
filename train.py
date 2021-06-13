@@ -15,6 +15,7 @@ from torchvision.datasets import MNIST, CIFAR10
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 
+import config.utils as cutils
 from config.config import get_config
 import activations
 import layers
@@ -371,17 +372,18 @@ class Trainer():
 def main(cfg):
     current_time = utils.get_current_time()
     
-    # override default-config parameters, with command-line-provided parameters
-    preset_cfg = utils.load_json(cfg.config)
-    cfg_dict = vars(cfg)
-    for key in cfg_dict:
-        if cfg_dict[key] is not None:
-            preset_cfg[key] = cfg_dict[key]
-    cfg = Namespace(**preset_cfg)
+    # override base-config parameters with arguments provided at run-time
+    base_cfg_dict = utils.load_json(cfg.base_config)
+    membership = cutils.get_membership(base_cfg_dict)
     
     cfg_dict = vars(cfg)
+    cfg_dict = {key: cfg_dict[key] for key in cfg_dict if cfg_dict[key] is not None}
+    
+    updated_cfg_dict = cutils.update_params(base_cfg_dict, cfg_dict, membership)
+    cfg = Namespace(**updated_cfg_dict)
+    
     utils.make_dirs('./config/save/', replace=False)
-    utils.save_json(cfg_dict, './config/save/config_{}.json'.format(current_time))
+    utils.save_json(updated_cfg_dict, './config/save/config_{}.json'.format(current_time))
     
     cfg.time = current_time
     cfg.model_name = '{}_{}'.format(cfg.model_name, current_time)

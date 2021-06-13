@@ -14,7 +14,7 @@ def add_argument_group(name):
 
 # config params
 config_arg = add_argument_group('Config Params')
-config_arg.add_argument('--config', type=str, default='./config/default_config.json',
+config_arg.add_argument('--base_config', type=str, default='./config/default_config.json',
                         help='json configuration file, to initialize configs with')
 
 # model params
