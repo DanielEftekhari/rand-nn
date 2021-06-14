@@ -187,16 +187,17 @@ class Trainer():
         if self.cfg.save_model:
             save_name = '{}-net_{}_epoch{:0=3d}_val_loss{:.4f}'.format(self.cfg.model_type, self.cfg.model_name, epoch, self.metrics['val_loss_avg'][-1])
             torch.save(self.net.state_dict(), os.path.join(self.cfg.model_dir, self.cfg.model_type, self.cfg.model_name, '{}.pth'.format(save_name)))
-            with open(os.path.join(self.cfg.model_dir, self.cfg.model_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.model_type, self.cfg.model_name)), 'w') as file:
-                file.write('{}.pth'.format(save_name))
+            if self.best_loss == self.metrics['val_loss_avg'][-1]:
+                with open(os.path.join(self.cfg.model_dir, self.cfg.model_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.model_type, self.cfg.model_name)), 'w') as file:
+                    file.write('{}.pth'.format(save_name))
     
     def init_hook(self):
         self.handle = {}
         if self.cfg.num_log > 0:
             for name in self.net.names:
-                self.handle[name] = self.net.layers[name].register_forward_hook(self.get_layer(name))
+                self.handle[name] = self.net.layers[name].register_forward_hook(self.get_hook(name))
     
-    def get_layer(self, name):
+    def get_hook(self, name):
         def hook(model, input, output):
             if self.flag_hook:
                 self.layers[name] = output.detach()
