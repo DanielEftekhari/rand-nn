@@ -21,6 +21,7 @@ import activations
 import layers
 import loss_fns
 from models import FCNet, ConvNet
+from hooks import Hook
 import plotting
 from db import dbTiny
 import metrics
@@ -67,16 +68,15 @@ class Trainer():
         self.dataloader_train = DataLoader(dataset=self.dataset_train, batch_size=self.cfg.batch_size, shuffle=self.cfg.shuffle,
                                            num_workers=self.cfg.num_workers, pin_memory=True, drop_last=False)
         
+        # number of output classes (based only on training data)
+        self.c_dim = len(torch.unique(self.dataset_train.targets))
+        
         self.dataset_val = self.dataset(root=self.data_path, train=False, download=True,
                                         transform=transforms.Compose(self.val_transforms),
                                         target_transform=None)
         self.dataloader_val = DataLoader(dataset=self.dataset_val, batch_size=self.cfg.batch_size, shuffle=False,
                                          num_workers=self.cfg.num_workers, pin_memory=True, drop_last=False)
         
-        # number of output classes
-        targets = np.asarray(self.dataset_train.targets)
-        self.c_dim = np.unique(targets).shape[0]
-
         # maximum entropy threshold for training with random inputs
         self.max_entropy = metrics.max_entropy(self.c_dim)
         self.thresh_entropy = self.cfg.train_random * self.max_entropy
@@ -132,11 +132,9 @@ class Trainer():
         # # fixed noise input -> can be used to benchmark output class entropy for random inputs
         # self.fixed_noise = torch.randn(size=(self.cfg.batch_size, *self.img_size)).to(self.device)
         
-        # flag controlling which minibatches will have layers hooked
-        self.flag_hook = False
-        self.layers = {}
         # register hooks
-        self.init_hook()
+        self.hook = Hook(self.cfg.num_log > 0)
+        self.hook.init_hook(self.net.names, self.net.layers)
         
         # measure performance before any training is done
         with torch.no_grad():
@@ -149,10 +147,10 @@ class Trainer():
         for epoch in range(1, self.cfg.epochs+1):
             self.metrics['epochs'].append(epoch)
             
-            self.clear_hook()
+            self.hook.clear_hook()
             self.train_one_epoch(self.dataloader_train)
             
-            self.init_hook()
+            self.hook.init_hook(self.net.names, self.net.layers)
             with torch.no_grad():
                 self.validate(self.dataloader_train, is_val_set=False, measure_entropy=True)
                 self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
@@ -191,30 +189,13 @@ class Trainer():
                 with open(os.path.join(self.cfg.model_dir, self.cfg.model_type, self.cfg.model_name, '{}-net_{}.txt'.format(self.cfg.model_type, self.cfg.model_name)), 'w') as file:
                     file.write('{}.pth'.format(save_name))
     
-    def init_hook(self):
-        self.handle = {}
-        if self.cfg.num_log > 0:
-            for name in self.net.names:
-                self.handle[name] = self.net.layers[name].register_forward_hook(self.get_hook(name))
-    
-    def get_hook(self, name):
-        def hook(model, input, output):
-            if self.flag_hook:
-                self.layers[name] = output.detach()
-        return hook
-    
-    def clear_hook(self):
-        for name in self.handle:
-            self.handle[name].remove()
-    
     def train_one_epoch(self, dataloader):
         self.net.train()
-        
-        self.flag_hook = False
+        self.hook.flag_hook = False
         
         for mb, (x, y) in enumerate(dataloader):
             x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
-            if self.cfg.train_random and (mb+1) % 10 == 0:
+            if self.cfg.train_random > 0 and (mb+1) % 10 == 0:
                 with torch.no_grad():
                     x_rand = torch.randn(size=x.shape).to(self.device)
                     logits_rand = self.net(x_rand)
@@ -232,9 +213,7 @@ class Trainer():
     
     def validate(self, dataloader, is_val_set=True, measure_entropy=True):
         self.net.eval()
-        
-        self.flag_hook = True
-        self.layers = {}
+        self.hook.flag_hook = True
         
         prefix = self.get_prefix(is_val_set)
         self.metrics_epoch = collections.defaultdict(utils.Meter)
@@ -262,8 +241,8 @@ class Trainer():
                 utils.save_array(y_np, filepath.format(prefix, 'data', 'y', self.metrics['epochs'][-1], mb+1))
                 utils.save_array(losses_np, filepath.format(prefix, 'data', 'losses', self.metrics['epochs'][-1], mb+1))
                 
-                for (k, layer_name) in enumerate(self.layers):
-                    layer_np = utils.tensor2array(self.layers[layer_name][0:num_log])
+                for (k, layer_name) in enumerate(self.hook.layers):
+                    layer_np = utils.tensor2array(self.hook.layers[layer_name][0:num_log])
                     utils.save_array(layer_np, filepath.format(prefix, 'data', layer_name, self.metrics['epochs'][-1], mb+1))
             
             if measure_entropy:
@@ -291,12 +270,12 @@ class Trainer():
                         utils.save_array(x_np, filepath.format(prefix, 'noise', 'x', self.metrics['epochs'][-1], mb+1))
                         utils.save_array(entropy_np, filepath.format(prefix, 'noise', 'entropy', self.metrics['epochs'][-1], mb+1))
                         
-                        for (k, layer_name) in enumerate(self.layers):
-                            layer_np = utils.tensor2array(self.layers[layer_name][0:num_log])
+                        for (k, layer_name) in enumerate(self.hook.layers):
+                            layer_np = utils.tensor2array(self.hook.layers[layer_name][0:num_log])
                             utils.save_array(layer_np, filepath.format(prefix, 'noise', layer_name, self.metrics['epochs'][-1], mb+1))
             
             # disable hook after first minibatch by default - this is done for computational/speed purposes
-            self.flag_hook = False
+            self.hook.flag_hook = False
         
         self.summarize_metrics(matrix, prefix)
     

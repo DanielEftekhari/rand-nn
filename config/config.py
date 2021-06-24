@@ -54,13 +54,13 @@ train_arg.add_argument('--optim', type=str,
 train_arg.add_argument('--lr', type=float,
                        help='learning rate')
 train_arg.add_argument('--momentum', type=float,
-                       help='momentum')
+                       help='momentum for sgd optimizer')
 train_arg.add_argument('--nesterov', type=checkbool,
-                       help='whether to use nesterov momentum')
+                       help='whether to use nesterov momentum with sgd')
 train_arg.add_argument('--beta1', type=float,
-                       help='beta1 in adam optimizer')
+                       help='beta1 for adam optimizer')
 train_arg.add_argument('--beta2', type=float,
-                       help='beta2 in adam optimizer')
+                       help='beta2 for adam optimizer')
 train_arg.add_argument('--shuffle', type=checkbool,
                        help='whether to shuffle training data')
 
