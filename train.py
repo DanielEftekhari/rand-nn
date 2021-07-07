@@ -23,7 +23,7 @@ import loss_fns
 from models import FCNet, ConvNet
 from hooks import Hook
 import plotting
-from db import dbTiny
+import db.utils as dutils
 import metrics
 import utils
 
@@ -32,7 +32,7 @@ class Trainer():
     def __init__(self, cfg):
         self.cfg = cfg
         
-        self.db = dbTiny.init_db(self.cfg.db_path)
+        self.db = dutils.init_db(self.cfg.db_path)
         self.init_post()
         
         self.device = torch.device(self.cfg.device)
@@ -142,6 +142,7 @@ class Trainer():
             self.validate(self.dataloader_val, is_val_set=True, measure_entropy=True)
         
         # save initial weights
+        self.eval_best_model(epoch=0)
         self.save_model(epoch=0)
         
         for epoch in range(1, self.cfg.epochs+1):
@@ -172,14 +173,16 @@ class Trainer():
                                    ['Training', 'Validation', 'Random'],
                                    'Epoch Number', 'Entropy', self.cfg)
             
-            if self.metrics['val_loss_avg'][-1] < self.best_loss:
-                self.best_loss = self.metrics['val_loss_avg'][-1]
-                print('New best model at epoch {:0=3d} with val_loss {:.4f}'.format(epoch, self.best_loss))
-                utils.flush()
-            
+            self.eval_best_model(epoch)
             self.save_model(epoch)
             self.update_post()
-        dbTiny.insert(self.db, self.post)
+        dutils.insert(self.db, self.post)
+    
+    def eval_best_model(self, epoch):
+        if self.metrics['val_loss_avg'][-1] < self.best_loss:
+            self.best_loss = self.metrics['val_loss_avg'][-1]
+            print('New best model at epoch {:0=3d} with val_loss {:.4f}'.format(epoch, self.best_loss))
+            utils.flush()
     
     def save_model(self, epoch):
         if self.cfg.save_model:
@@ -194,7 +197,9 @@ class Trainer():
         self.hook.flag_hook = False
         
         for mb, (x, y) in enumerate(dataloader):
-            x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
+            x, y = x.to(self.device), y.to(self.device)
+            y_one_hot = utils.to_one_hot(y, self.c_dim)
+            
             if self.cfg.train_random > 0 and (mb+1) % 10 == 0:
                 with torch.no_grad():
                     x_rand = torch.randn(size=x.shape).to(self.device)
@@ -219,8 +224,8 @@ class Trainer():
         self.metrics_epoch = collections.defaultdict(utils.Meter)
         matrix = np.zeros((self.c_dim, self.c_dim), dtype=np.uint32)
         for mb, (x, y) in enumerate(dataloader):
-            x, y_one_hot = x.to(self.device), utils.to_one_hot(y, self.c_dim).to(self.device)
-            y = y.to(self.device)
+            x, y = x.to(self.device), y.to(self.device)
+            y_one_hot = utils.to_one_hot(y, self.c_dim)
             
             logits = self.net(x)
             losses = self.criterion(logits, y_one_hot)
@@ -296,7 +301,7 @@ class Trainer():
         utils.flush()
     
     def init_post(self):
-        last_run = dbTiny.get_last(self.db, 'run')
+        last_run = dutils.get_last(self.db, 'run')
         if last_run:
             run = last_run + 1
         else:
@@ -360,7 +365,7 @@ class Trainer():
 
 
 def main(cfg):
-    current_time = utils.get_current_time()
+    start_time = utils.get_current_time()
     
     # override base-config parameters with arguments provided at run-time
     base_cfg_dict = utils.load_json(cfg.base_config)
@@ -373,10 +378,10 @@ def main(cfg):
     cfg = Namespace(**updated_cfg_dict)
     
     utils.make_dirs('./config/save/', replace=False)
-    utils.save_json(updated_cfg_dict, './config/save/config_{}.json'.format(current_time))
+    utils.save_json(updated_cfg_dict, './config/save/config_{}.json'.format(start_time))
     
-    cfg.time = current_time
-    cfg.model_name = '{}_{}'.format(cfg.model_name, current_time)
+    cfg.time = start_time
+    cfg.model_name = '{}_{}'.format(cfg.model_name, start_time)
     
     # setting up output directories, and writing to stdout
     utils.make_dirs(os.path.join(cfg.stdout_dir, cfg.model_type), replace=False)

@@ -23,3 +23,8 @@ def sort_by_field(db, field, reverse=False):
 
 def insert(db, post):
     db.insert(post)
+
+
+# TODO: implement general query function here
+def query(db, fileld, filter):
+    pass

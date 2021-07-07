@@ -25,7 +25,7 @@ class Meter():
         
         new_avg = (self.avg * self.n + sums) / (self.n + m)
         self.var = self.n / (self.n + m) * (self.var + math.pow(self.avg, 2)) + 1 / (self.n + m) * squared_sums - math.pow(new_avg, 2)
-        self.var = max(0., self.var)
+        self.var = max(0., self.var) # enforces numerical stability for variances very close to 0
         self.std = math.sqrt(self.var)
         self.avg = new_avg
         self.n += m
@@ -95,7 +95,7 @@ def logits_to_probs(logits):
 
 
 def to_one_hot(y, c_dim):
-    y_one_hot = torch.zeros(size=(y.shape[0], c_dim))
+    y_one_hot = torch.zeros(size=(y.shape[0], c_dim)).to(y.device)
     y_one_hot.scatter_(1, y.unsqueeze(-1), 1)
     return y_one_hot
 
